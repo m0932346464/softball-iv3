@@ -163,6 +163,9 @@ dialog h2{margin:0 0 10px;font-size:22px}
 .upbox table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}.upbox td,.upbox th{border:1px solid var(--rule);padding:3px 6px;text-align:left}
 #linkbtn.ok{border-color:#15803d;color:#15803d;font-weight:700}#linkbtn.wait{border-color:#b45309;color:#b45309;font-weight:700}
 #upbtn.done{background:#15803d;border-color:#15803d}
+#upbtn.done:disabled,#upbtn.auto:disabled{opacity:1;cursor:default}
+#upbtn.auto{background:var(--surface);color:var(--muted);border-color:var(--rule);font-weight:500}
+#upbtn.redo{background:#d97706;border-color:#d97706;color:#fff}
 .slots{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
 .slots button{border:1px solid var(--rule);background:var(--surface);border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;line-height:1.2}
 .slots button b{font:700 20px var(--display)}.slots button small{font-size:13px;color:var(--muted);text-align:center;padding:2px 4px}
@@ -685,7 +688,15 @@ function render() {
   { const h = $('inn-h'), pr = !!partner(s); h.hidden = !pr; if (pr) { const up = s.side === 'away'; h.className = 'ih ' + (up ? 'top' : 'bot'); h.textContent = up ? '▲上' : '▼下'; h.title = up ? '上半局：先攻隊進攻' : '下半局：後攻隊進攻'; } }
   repStatus(); renderGameBar();
   { const o = Math.min(3, outsIn(s, s.inning || 1)); $('outs').innerHTML = '出局' + [0, 1, 2].map(k => `<i data-o="${k + 1}" class="${k < o ? 'on' : ''}"></i>`).join(''); }
-  { const same = s.upload && s.upload.sig === sigOf(s); $('upbtn').classList.toggle('done', !!same); $('upbtn').textContent = s.upload ? (same ? '☁ 已上傳' : '☁ 重新上傳') : '☁ 上傳'; }
+  { /* 上傳鍵：平常只顯示狀態；只有「待上傳」「重新上傳」或沒有連結場次時才可以按，避免比賽中途誤按 */
+    const b = $('upbtn'), same = s.upload && s.upload.sig === sigOf(s), e = endedOf(s), any = s.rows.some(r => r.res.some(Boolean));
+    let t, on, tip, cls = '';
+    if (same) { t = '☁ 已上傳'; on = false; cls = 'done'; tip = '這份紀錄表已上傳到管理後台「待匯入」，內容沒有變動'; }
+    else if (s.upload) { t = '☁ 重新上傳'; on = true; cls = 'redo'; tip = '上傳後又改過紀錄表，按這裡把新版送給管理員'; }
+    else if (!s.link) { t = '☁ 上傳'; on = any; tip = '這張紀錄表沒有連結場次，請手動選場次上傳'; }
+    else if (e) { t = '☁ 待上傳'; on = true; cls = 'redo'; tip = '比賽已結束但還沒送出（可能沒網路或未登入），恢復後自動上傳；也可以按這裡手動上傳'; }
+    else { t = '☁ 賽後自動上傳'; on = false; cls = 'auto'; tip = '比賽中打席已即時回報到後台資訊中控；按「🏁 比賽結束」確認後會自動上傳兩隊紀錄表'; }
+    b.textContent = t; b.disabled = !on; b.title = tip; b.classList.toggle('done', cls === 'done'); b.classList.toggle('redo', cls === 'redo'); b.classList.toggle('auto', cls === 'auto'); }
   markZone(row.loc[c.c]);
   const tdOn = $('sheet').querySelector('td.on'); if (tdOn) tdOn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -1334,6 +1345,7 @@ async function autoUpload() {
   upBusy = false; renderUpState();
 }
 function renderUpState() {   // 比賽已結束但紀錄表還沒送出：上傳按鈕標示待送
+  return;   // 按鈕狀態統一在 render() 處理
   const e = endedOf(sh()), b = $('upbtn'); if (!b || !e || e.uploaded) return;
   b.textContent = '☁ 待上傳'; b.title = !UPFB ? '沒有網路，連線後自動上傳' : !UP.user ? '尚未登入紀錄員帳號，登入後自動上傳' : '上傳中或稍後重試；也可以按這裡手動上傳';
 }
