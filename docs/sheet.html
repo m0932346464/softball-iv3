@@ -346,6 +346,11 @@ table.endline td.tot{font-weight:900;font-size:17px}
   <p style="margin:8px 0;color:var(--muted);font-size:13px">依賽事規則：比賽 7 局或時間到為止，滿 45（複決賽 55）分鐘後不開新局；時間到時後攻在下半局領先即結束比賽。倒數到這些時間點會提醒紀錄員確認。</p>
   <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="ck-reset" hidden>取消計時</button><button class="btn" id="ck-cancel">關閉</button><button class="btn pri" id="ck-go">開始計時</button></div>
 </dialog>
+<dialog id="dlg-lk" style="width:560px"><h2 style="margin-bottom:4px">🔗 已連結本場</h2><div id="lk-title" style="font-weight:700;font-size:17px;margin-bottom:8px"></div>
+  <p id="lk-state" style="margin:0 0 10px;font-size:15px"></p>
+  <div class="qlinks" style="margin:0"><b>開啟本場：</b><span id="lk-links" style="display:contents"></span></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-top:12px"><a href="#" id="lk-relink" style="font-size:13px;color:var(--muted)">連結錯了？重新選場次</a><span style="flex:1"></span><button class="btn" id="lk-close">關閉</button></div>
+</dialog>
 <dialog id="dlg-pick"><h2>切換／刪除紀錄表</h2><p style="margin:0;color:var(--muted);font-size:15px">點紀錄表名稱切換；按「刪除」再按一次「確定刪除」才會刪掉，刪除前建議先匯出資料備份。</p><div class="list" id="pick-list"></div><div style="display:flex;justify-content:flex-end"><button class="btn" id="pick-close">關閉</button></div></dialog>
 <dialog id="dlg-sub"><h2>PH 代打</h2>
   <p style="margin:0 0 8px;color:var(--muted);font-size:15px">選被替換的打擊次序，輸入代打背號。會在那一棒下方新增一行，之後輪到這一棒就由新的一行接著記。</p>
@@ -956,6 +961,7 @@ async function upRender() {
   if (!['admin', 'scorer'].includes(UP.role)) { b.innerHTML = `<p class="msg err">${UP.role === 'pending' ? '你的帳號還在「待開通」，請管理員到後台「紀錄員」分頁開通後再上傳。' : '正在確認帳號權限…'}</p>`; return; }
   b.innerHTML = '<p class="msg">讀取賽程中…</p>';
   try { if (!UP.games.length) await upLoadTour(); } catch (e) { b.innerHTML = '<p class="msg err">讀取賽程失敗，請確認網路後再試一次。</p>'; return; }
+  const GL = upGames();   // 只列出兩隊和紀錄表相符的場次（只有一場就自動選好）
   const g = UP.games.find(x => x.id === UP.gid);
   if (g && !UP.side) UP.side = guessSide(g) || '';
   const P = buildPayload(), tId = g && UP.side ? g[UP.side + 'Id'] : '';
@@ -964,7 +970,7 @@ async function upRender() {
   const STS = { scheduled: '未開賽', live: '比賽中', final: '已結束' };
   b.innerHTML = `<p class="msg">登入：${esc(UP.name || UP.user.email)}（${UP.role === 'admin' ? '管理員' : '紀錄員'}）　<a href="#" id="up-out">登出</a></p>
     <label>賽事<select id="up-tid">${(UP.tours || []).map(t => `<option value="${t.id}"${t.id === UP.tid ? ' selected' : ''}>${esc(t.name)}${t.archived ? '（已封存）' : ''}</option>`).join('')}</select></label>
-    <label>場次<select id="up-gid"><option value="">— 選這張紀錄表是哪一場 —</option>${UP.games.map(x => `<option value="${x.id}"${x.id === UP.gid ? ' selected' : ''}>第 ${esc(x.gameNo || '')} 場｜${esc(UP.teams[x.awayId] || '')}（先攻） vs ${esc(UP.teams[x.homeId] || '')}（後攻）｜${STS[x.status || 'scheduled']}</option>`).join('')}</select></label>
+    <label>場次<select id="up-gid"><option value="">${GL.length ? '— 選這張紀錄表是哪一場 —' : '— 賽程上找不到這兩隊的場次 —'}</option>${GL.map(x => `<option value="${x.id}"${x.id === UP.gid ? ' selected' : ''}>第 ${esc(x.gameNo || '')} 場｜${esc(UP.teams[x.awayId] || '')}（先攻） vs ${esc(UP.teams[x.homeId] || '')}（後攻）｜${STS[x.status || 'scheduled']}</option>`).join('')}</select></label>
     ${g ? `<label>本隊<select id="up-side"><option value="">— 這張是哪一隊的打擊紀錄 —</option><option value="away"${UP.side === 'away' ? ' selected' : ''}>先攻：${esc(UP.teams[g.awayId] || '')}</option><option value="home"${UP.side === 'home' ? ' selected' : ''}>後攻：${esc(UP.teams[g.homeId] || '')}</option></select></label>` : ''}
     <table><tr><th>打席數</th><td>${P.pas.length}</td><th>局數</th><td>${P.innings.length}</td><th>本隊得分</th><td>${P.innings.reduce((a, b) => a + b, 0)}</td></tr>
     <tr><th>逐局</th><td colspan="5">${P.innings.map((v, i) => `${i + 1}局 ${v}`).join('｜') || '—'}</td></tr>
@@ -982,9 +988,28 @@ async function upRender() {
   if (UPMODE === 'link') upMsg('連結後，每局三人出局（或按「換局」）時，自動把本隊這半局得分寫到「逐局比分紀錄」；沒網路時先存著，有網路再補送。賽後仍要按「上傳」交給管理員匯入打席資料。');
 }
 let UPMODE = 'upload';
+/* 場次清單只列和紀錄表隊伍相符的場次（整場比賽兩隊都要相符；單隊紀錄表含本隊即可）；只有一場就直接選好 */
+function upGames() {
+  const s0 = sh(), p0 = partner(s0), nm = id => UP.teams[id] || '', is = (x, id) => x && (x.teamId ? x.teamId === id : normT(x.team) === normT(nm(id)));
+  const has = (x, g) => is(x, g.awayId) || is(x, g.homeId), named = [s0, p0].filter(x => x && (x.team || x.teamId));
+  const L = named.length ? UP.games.filter(g => named.every(x => has(x, g))) : UP.games;
+  if (!UP.gid && L.length === 1) { UP.gid = L[0].id; UP.side = ''; }
+  if (UP.gid && !L.some(g => g.id === UP.gid)) { UP.gid = ''; UP.side = ''; }
+  return L;
+}
 function openUp(mode) { const L = sh().link || {}; UPMODE = mode; UP.games = []; UP.tid = L.tid || UP.tid; UP.gid = L.gid || ''; UP.side = L.side || sh().side || ''; $('up-title').textContent = mode === 'link' ? '連結本場比賽' : '上傳到管理後台'; $('dlg-up').showModal(); upRender(); }
 $('upbtn').onclick = () => { if (!ready()) { render(); return; } openUp('upload'); };
-$('linkbtn').onclick = () => openUp('link');
+$('linkbtn').onclick = () => { if (!sh().link) { openUp('link'); return; } openLinkMenu(); };
+function openLinkMenu() {   // 已連結：只顯示同步狀態與跳到其他頁面；改場次要另外點「連結錯了？」
+  const s = sh(), L = s.link, q = `?t=${encodeURIComponent(L.tid)}&g=${encodeURIComponent(L.gid)}`, p = partner(s);
+  const n = repTodo(s).length + (p && p.link ? repTodo(p).length : 0);
+  $('lk-title').textContent = `第 ${L.gameNo} 場${p ? `｜${nickOf(s.side === 'away' ? s.team : p.team)}（先攻） vs ${nickOf(s.side === 'away' ? p.team : s.team)}（後攻）` : `｜${nickOf(s.team)}`}`;
+  $('lk-state').innerHTML = n ? `<b style="color:#b45309">⏳ 還有 ${n} 個半局的比分等待回報</b>：${esc(repErr || (!UPFB ? '沒有網路，連線後自動補送' : !UP.user ? '尚未登入紀錄員帳號' : '回報中…'))}` : '<b style="color:#15803d">✓ 比分已同步到逐局比分紀錄</b>；打序與落點也即時回報給後台資訊中控。';
+  $('lk-links').innerHTML = `<a href="score.html${q}">逐局比分紀錄</a><a href="index.html${q}">後台資訊中控</a><a href="admin.html${q}">賽務管理後台</a><a href="standings.html${q}">預賽排名看板</a>`;
+  $('dlg-lk').showModal();
+}
+$('lk-close').onclick = () => $('dlg-lk').close();
+$('lk-relink').onclick = e => { e.preventDefault(); $('dlg-lk').close(); openUp('link'); };
 $('up-close').onclick = () => $('dlg-up').close();
 $('up-ok').onclick = async () => {
   const g = UP.games.find(x => x.id === UP.gid); if (!g || !UP.side) return;
