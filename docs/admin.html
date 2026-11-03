@@ -269,7 +269,13 @@ button.sm,label.sm{min-height:30px;padding:3px 10px;font-size:12px;cursor:pointe
 
     <!-- 成績統計 -->
     <section class="tabpane" data-t="stats" hidden style="display:flex;flex-direction:column;gap:14px">
-      <style>.lead-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.lead{border:1px solid var(--rule);border-radius:8px;overflow:hidden}.lead h3{margin:0;padding:8px 12px;font-size:13px;background:var(--sunk);border-bottom:1px solid var(--rule)}.lead ol{margin:0;padding:6px 12px 8px 30px;font-size:13px}.lead li{padding:3px 0;display:flex;gap:8px}.lead li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lead li b{font-variant-numeric:tabular-nums}.lead li:first-child{font-weight:700}</style>
+      <style>.lead-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.lead{border:1px solid var(--rule);border-radius:8px;overflow:hidden}.lead h3{margin:0;padding:8px 12px;font-size:13px;background:var(--sunk);border-bottom:1px solid var(--rule)}.lead ol{margin:0;padding:6px 12px 8px 30px;font-size:13px}.lead li{padding:3px 0;display:flex;gap:8px}.lead li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lead li b{font-variant-numeric:tabular-nums}.lead li:first-child{font-weight:700}/* 手機：分頁排成兩行，全部看得到 */
+@media (max-width:600px){
+  .tabs.main{display:grid;grid-template-columns:repeat(4,1fr);overflow:visible;padding:4px}
+  .tabs.main .tab{padding:9px 2px;font-size:13px;text-align:center;white-space:nowrap}
+  .tabs.main .tab .badge{margin-left:2px}
+}
+</style>
       <div class="panel">
         <div class="ph"><h2>預賽分組積分</h2><div class="inn-row" style="gap:6px"><a class="ghost sm" href="standings.html" target="_blank" rel="noopener" style="text-decoration:none">預賽排名看板 ›</a><button class="ghost" type="button" id="csv-std">複製 CSV</button></div></div>
         <div class="pb"><div class="tbl-wrap" style="max-height:none"><table>

@@ -58,6 +58,9 @@ tr.xrow td{padding:8px 12px;text-align:left;background:color-mix(in srgb,var(--a
 .gx.w{border-color:var(--r3);color:var(--r3)}.gx.l{border-color:var(--r1);color:var(--r1)}.gx.live{border-color:var(--r1);color:var(--r1);font-weight:700}.gx.next{color:var(--muted)}
 @media (max-width:640px){.mv{display:block;margin:2px 0 0;font-size:11px}.caret{display:none}}
 @media (max-width:640px){.hide-sm{display:none}table.std{font-size:14px;table-layout:fixed}table.std td{padding:9px 2px}table.std th{padding:8px 2px}table.std th:first-child{width:36px}table.std th:not(.tm):not(:first-child){width:34px}table.std td.tm{padding-left:6px;word-break:break-all;overflow-wrap:anywhere;white-space:normal;line-height:1.3}.livepill{display:block;margin:2px 0 0;font-size:10px}.rk{width:24px;height:24px;font-size:14px}.page{padding-inline:12px}.gm{grid-template-columns:52px minmax(0,1fr) auto minmax(0,1fr);}.gm .st{display:none}}
+.xsm{display:none;font-size:13px;color:var(--muted);margin-bottom:6px}.xsm b{color:var(--ink)}
+@media (max-width:640px){.xsm{display:block}.std-tip{display:block!important}}
+.std-tip{display:none;font-size:12px;color:var(--muted);margin:2px 0 6px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
@@ -161,12 +164,12 @@ function render() {
     const live = gGames.filter(x => x.status === 'live'), next = gGames.filter(x => (x.status || 'scheduled') === 'scheduled').slice(0, 3);
     return `<section class="gsec">
       <h2>${esc(g)} 組積分與排名 <span class="state ${done ? 'final' : 'temp'}">${done ? '最終排名' : '暫定排名'}</span><span class="note" style="font-weight:400;font-size:12px">${gGames.filter(x => x.status === 'final').length}/${gGames.length} 場已結束</span></h2>
-      <table class="std"><thead><tr><th>排名</th><th class="tm">學校</th><th class="hide-sm">場數</th><th>勝</th><th>和</th><th>敗</th><th>積分</th><th>得分</th><th>失分</th><th class="hide-sm">防守局數</th><th class="hide-sm">名次依據</th></tr></thead>
+      <p class="std-tip">點學校可展開場數、防守局數與名次依據</p><table class="std"><thead><tr><th>排名</th><th class="tm">學校</th><th class="hide-sm">場數</th><th>勝</th><th>和</th><th>敗</th><th>積分</th><th>得分</th><th>失分</th><th class="hide-sm">防守局數</th><th class="hide-sm">名次依據</th></tr></thead>
       <tbody>${list.map(r => { const pv = prev.get(r.id), mv = pv != null ? pv - r.rank : 0, open = OPEN.has(r.id); return `<tr class="trow${open ? ' open' : ''}" data-team="${r.id}" tabindex="0" aria-expanded="${open}"><td><span class="rk ${r.g ? 'r' + r.rank : ''}">${r.rank}</span>${mv ? `<span class="mv ${mv > 0 ? 'up' : 'dn'}" title="與最近一場結束前相比">${mv > 0 ? '▲' : '▼'}${Math.abs(mv)}</span>` : ''}</td>
         <td class="tm">${esc(r.name)}<span class="caret">${open ? '▴' : '▾'}</span>${r.live ? '<span class="livepill">● 比賽中</span>' : ''}</td><td class="hide-sm">${r.g}</td>
         <td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td class="pts">${r.pts}</td><td>${r.rs}</td><td>${r.ra}</td><td class="hide-sm">${r.def}</td>
         <td class="hide-sm">${r.basis ? `<span class="basis ${r.basis === '需抽籤' ? 'lot' : ''}">${r.basis}</span>` : ''}</td></tr>
-        ${open ? `<tr class="xrow"><td colspan="11"><div class="xg">${teamGames(r.id).map(x => x.res === 'next'
+        ${open ? `<tr class="xrow"><td colspan="11"><div class="xsm">場數 <b>${r.g}</b>・防守局數 <b>${r.def}</b>${r.basis ? `・名次依據 <b>${r.basis}</b>` : ''}</div><div class="xg">${teamGames(r.id).map(x => x.res === 'next'
           ? `<span class="gx next">下一場 ${hhmm(x.g)}${x.g.field ? ' ' + esc(x.g.field) : ''} vs ${esc(x.opp)}</span>`
           : `<span class="gx ${x.res}">${{ w: '勝', l: '敗', d: '和', live: '● 進行中' }[x.res]} ${esc(x.opp)} ${x.ms ?? 0}:${x.os ?? 0}</span>`).join('') || '<span class="note">尚無賽程</span>'}</div></td></tr>` : ''}`; }).join('')}</tbody></table>
       ${live.length || next.length ? `<div class="games">${live.concat(next).map(x => `<div class="gm ${x.status === 'live' ? 'live' : ''}"><span class="t">${hhmm(x)}<br>${esc(x.field || '')}</span><span class="a">${esc(teamName(x.awayId))}</span><span class="sc">${x.status === 'live' ? `${x.awayScore ?? 0} : ${x.homeScore ?? 0}` : 'vs'}</span><span>${esc(teamName(x.homeId))}</span><span class="st">${x.status === 'live' ? '● 比賽中' : '未開賽'}</span></div>`).join('')}</div>` : ''}

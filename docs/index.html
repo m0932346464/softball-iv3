@@ -599,6 +599,40 @@ table.ps tfoot td{height:38px;font-weight:700;background:var(--sunk);border-top:
 .ib-r .rr em{font-style:normal;font-size:11.5px;color:#b45309;margin-left:4px}
 #bx-mode{flex:none}
 .ps-top{flex-wrap:wrap}
+/* 本場成績：窄螢幕可左右滑，棒次、姓名固定在左邊 */
+@media (max-width:900px){
+  .ps-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.ps{min-width:780px}
+  table.ps thead tr:last-child th:nth-child(-n+3),table.ps tbody td:nth-child(-n+3){position:sticky;z-index:1;background:var(--surface)}
+  table.ps thead tr:last-child th:nth-child(1),table.ps tbody td:nth-child(1){left:0}
+  table.ps thead tr:last-child th:nth-child(2),table.ps tbody td:nth-child(2){left:46px}
+  table.ps thead tr:last-child th:nth-child(3),table.ps tbody td:nth-child(3){left:98px;box-shadow:2px 0 0 var(--rule)}
+  table.ps thead th{background:var(--sunk)}
+}
+@media (max-width:600px){
+  table.ps{min-width:640px}
+  table.ps thead tr:last-child th:nth-child(3),table.ps tbody td:nth-child(3){position:static;box-shadow:none}
+  table.ps thead tr:last-child th:nth-child(2),table.ps tbody td:nth-child(2){left:34px;box-shadow:2px 0 0 var(--rule)}
+  table.ps td.nm .nno{display:block;font:700 13px var(--display);color:var(--muted)}
+  table.ps td.nm{font-size:13px}
+  .ps .cell b{font-size:15px}
+  .ps-top .ps-lg .t{display:none}
+}
+/* 手機：頁首精簡，讓內容早點出現 */
+@media (max-width:600px){
+  .mast-top{padding-block:8px 4px!important;gap:4px}
+  .mast-top h1{font-size:17px!important}
+  .mast-top .title-row{gap:6px;flex-wrap:wrap}.mast-top .game-label{font-size:12px}
+  .who{gap:4px 10px!important;font-size:12px;flex-wrap:nowrap!important;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+  .who::-webkit-scrollbar{display:none}
+  #who-email,#sync-txt,#fs-btn,#to-detail{display:none!important}
+  .who button{padding:2px 8px;font-size:12px}
+  .mast-bar{display:grid!important;grid-template-columns:1fr 1fr;gap:6px!important;padding-block:0 8px!important}
+  .mast-bar .modebar{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr)}
+  .mast-bar .modebar button{padding:7px 2px;font-size:13px}
+  .mast-bar>label{flex-direction:column!important;align-items:stretch!important;gap:2px!important;font-size:11px;min-width:0}
+  .mast-bar>label>select{width:100%!important;min-width:0;font-size:13px}
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
@@ -1542,20 +1576,21 @@ function renderSheet() {
   if (L.length) for (let j = 1; j < mine.length; j++) { const a = mine[j - 1], b = mine[j]; if (a.slot && b.slot) { const exp = a.slot % L.length + 1; if (b.slot !== exp) skip.set(b.id, exp); } }
   const CN = '一二三四五六七八九十';
   const kind = b => ['1B', '2B', '3B'].includes(b.result) ? 'hit' : b.result === 'HR' ? 'hr' : ['BB', 'E', 'FC'].includes(b.result) ? 'on' : b.result === 'K' ? 'k' : 'out';
-  $('sheet-cols').innerHTML = `<col style="width:46px"><col style="width:52px"><col style="width:118px">${cols.map(() => '<col>').join('')}${'<col style="width:44px">'.repeat(8)}`;
-  $('sheet-head').innerHTML = `<tr class="g"><th colspan="3"></th><th colspan="${cols.length}" class="grp">打擊（第幾輪）</th><th colspan="8" class="grp">本場成績</th></tr>
-    <tr><th>棒次</th><th>背號</th><th class="nm">姓名</th>${cols.map((c, k) => `<th class="${k ? '' : 'grp'}">${CN[c.r] || c.r + 1}</th>`).join('')}<th class="grp" title="打席">席</th><th title="打數">數</th><th title="安打">安</th><th title="得分">分</th><th title="打點">點</th><th>HR</th><th>BB</th><th>K</th></tr>`;
+  const NW = matchMedia('(max-width:600px)').matches;   // 手機：背號併入姓名欄，表格可左右滑、棒次與姓名固定
+  $('sheet-cols').innerHTML = `<col style="width:${NW ? 34 : 46}px">${NW ? '' : '<col style="width:52px">'}<col style="width:${NW ? 92 : 118}px">${cols.map(() => '<col>').join('')}${'<col style="width:44px">'.repeat(8)}`;
+  $('sheet-head').innerHTML = `<tr class="g"><th colspan="${NW ? 2 : 3}"></th><th colspan="${cols.length}" class="grp">打擊（第幾輪）</th><th colspan="8" class="grp">本場成績</th></tr>
+    <tr><th>棒次</th>${NW ? '' : '<th>背號</th>'}<th class="nm">姓名</th>${cols.map((c, k) => `<th class="${k ? '' : 'grp'}">${CN[c.r] || c.r + 1}</th>`).join('')}<th class="grp" title="打席">席</th><th title="打數">數</th><th title="安打">安</th><th title="得分">分</th><th title="打點">點</th><th>HR</th><th>BB</th><th>K</th></tr>`;
   const warn = skip.size ? `<tr><td colspan="${cols.length + 11}" class="skip-note">⚠ 有 ${skip.size} 個打席的棒次不連續（紅框）：請到「明細」確認打者是否記錯，或是否有代打、跳棒。</td></tr>` : '';
   const T = { pa: 0, ab: 0, h: 0, r: 0, rbi: 0, HR: 0, BB: 0, K: 0 };
   $('sheet-rows').innerHTML = rows.length ? warn + rows.map(o => {
     const p = pById(o.id), bs = mine.filter(b => b.batterId === o.id), st = emptyLine({}); bs.forEach(b => addBall(st, b, FD));
     const r = mine.reduce((s, b) => s + ((b.run && b.run.scored) || []).filter(x => x === o.id).length, 0), rbi = bs.reduce((s, b) => s + ((b.run && b.run.rbi) || 0), 0);
     T.pa += st.pa; T.ab += st.ab; T.h += st.h; T.r += r; T.rbi += rbi; T.HR += st.HR; T.BB += st.BB; T.K += st.K;
-    return `<tr class="${o.sub ? 'sub' : ''}"><td class="ord">${o.sub ? '<span class="subtag">代</span>' : o.slot}</td><td class="no">${esc(p ? p.no : '')}</td><td class="nm">${esc(p ? p.name : '')}${o.sub ? `<small>${fromOf(o.id, o.from)}局起</small>` : ''}</td>${cols.map((c, k) => {
+    return `<tr class="${o.sub ? 'sub' : ''}"><td class="ord">${o.sub ? '<span class="subtag">代</span>' : o.slot}</td>${NW ? '' : `<td class="no">${esc(p ? p.no : '')}</td>`}<td class="nm">${NW && p ? `<span class="nno">#${esc(p.no)}</span>` : ''}${esc(p ? p.name : '')}${o.sub ? `<small>${fromOf(o.id, o.from)}局起</small>` : ''}</td>${cols.map((c, k) => {
       const b = bs.find(x => round.get(x.id) === c.r), sx = b && skip.get(b.id);
       return `<td class="pa ${k ? '' : 'pa1'}${sx ? ' skip' : ''}"${sx ? ` title="棒次不連續：這一筆前一棒之後應輪到第 ${sx} 棒"` : ''}>${b ? `<div class="cell ${kind(b)}"><i class="inn">${b.inning || ''}</i><b>${paperCode(b)}</b><span>${hasLoc(b) ? esc(FD.zoneCode(b)) : ''}</span></div>` : ''}</td>`; }).join('')}<td class="st pa1">${st.pa}</td><td class="st">${st.ab}</td><td class="st">${st.h || ''}</td><td class="st">${r || ''}</td><td class="st">${rbi || ''}</td><td class="st">${st.HR || ''}</td><td class="st">${st.BB || ''}</td><td class="st">${st.K || ''}</td></tr>`;
   }).join('') : `<tr><td colspan="${cols.length + 11}" class="empty">尚未排打序或尚無紀錄</td></tr>`;
-  $('sheet-foot').innerHTML = rows.length ? `<tr><td colspan="3" class="nm">合計<small style="font-weight:500;color:var(--muted);margin-left:6px">打擊率 ${T.ab ? (T.h / T.ab).toFixed(3).replace(/^0/, '') : '—'}</small></td>${cols.map((c, k) => `<td class="${k ? '' : 'pa1'}"></td>`).join('')}<td class="st pa1">${T.pa}</td><td class="st">${T.ab}</td><td class="st">${T.h}</td><td class="st">${T.r}</td><td class="st">${T.rbi}</td><td class="st">${T.HR}</td><td class="st">${T.BB}</td><td class="st">${T.K}</td></tr>` : '';
+  $('sheet-foot').innerHTML = rows.length ? `<tr><td colspan="${NW ? 2 : 3}" class="nm">合計<small style="font-weight:500;color:var(--muted);margin-left:6px">打擊率 ${T.ab ? (T.h / T.ab).toFixed(3).replace(/^0/, '') : '—'}</small></td>${cols.map((c, k) => `<td class="${k ? '' : 'pa1'}"></td>`).join('')}<td class="st pa1">${T.pa}</td><td class="st">${T.ab}</td><td class="st">${T.h}</td><td class="st">${T.r}</td><td class="st">${T.rbi}</td><td class="st">${T.HR}</td><td class="st">${T.BB}</td><td class="st">${T.K}</td></tr>` : '';
   { /* 依局數：每局依序列出打者與結果，方便核對每局得分 */
     const byI = {}; mine.forEach(b => (byI[b.inning || 1] = byI[b.inning || 1] || []).push(b));
     const sc = b => ((b.run && b.run.scored) || []).length;
@@ -1566,6 +1601,7 @@ function renderSheet() {
     [...$('bx-mode').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === m)); }
   $('sheet-lg').innerHTML = '<span><i class="hit"></i>安打</span><span><i class="hr"></i>全壘打</span><span><i class="on"></i>保送・失誤・野選</span><span><i class="out"></i>出局</span><span><i class="k"></i>三振</span><span class="t">格內：左上局數｜代號｜落點格位。F 高飛、G 滾地、L 平飛、FS 高犧、GS 滾犧、DP 雙殺</span>';
 }
+{ let nw0 = matchMedia('(max-width:600px)').matches; addEventListener('resize', () => { const n = matchMedia('(max-width:600px)').matches; if (n !== nw0) { nw0 = n; try { renderSheet(); } catch (_) {} } }); }
 $('bx-mode').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (!b) return; U.bxMode = b.dataset.v; saveU(); renderSheet(); });
 /* ---------- 賽事轉播稿：把整場打席紀錄整理成轉播員口吻，並可匯出 ---------- */
 const CN_N = n => '零一二三四五六七八九十'[n] || String(n);
