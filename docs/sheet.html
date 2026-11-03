@@ -996,7 +996,7 @@ $('up-ok').onclick = async () => {
     }
     save(); render();
     $('dlg-up').close(); toast(`已上傳第 ${g.gameNo} 場：${done.join('、')}，等管理員匯入`);
-  } catch (e) { upMsg('上傳失敗：' + (e && e.code === 'permission-denied' ? '沒有權限（帳號需為紀錄員）' : '請確認網路後再試一次'), true); }
+  } catch (e) { upMsg('上傳失敗：' + (e && e.code === 'permission-denied' ? '沒有權限。請確認帳號是紀錄員或管理員，以及 Firebase 已套用最新的 firestore.rules（需有 uploads 規則）' : '請確認網路後再試一次'), true); }
   btn.disabled = false;
 };
 
