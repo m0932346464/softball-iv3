@@ -268,6 +268,22 @@ table.endline td.tot{font-weight:900;font-size:17px}
 .more{position:relative}.more>summary{list-style:none;cursor:pointer}.more>summary::-webkit-details-marker{display:none}
 .more .menu{position:absolute;right:0;top:calc(100% + 4px);z-index:30;display:flex;flex-direction:column;gap:4px;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.15);min-width:120px}
 .more .menu .btn{text-align:left}
+/* 已連結本場選單 */
+dialog.lk{padding:18px 20px 14px}
+.lk-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}.lk-head>div{flex:1;min-width:0}
+.lk-head small{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em}
+.lk-title{display:flex;flex-direction:column;gap:2px;margin-top:2px}
+.lk-no{font:700 13px var(--body);color:var(--cur)}
+.lk-vs{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;font-size:20px}.lk-vs b{font-weight:900}.lk-vs em{font-style:normal;font-size:12px;color:var(--muted)}.lk-vs i{font-style:normal;font-size:13px;color:var(--muted);margin:0 4px}
+.lk-x{border:0;background:transparent;font-size:18px;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:6px}.lk-x:hover{background:var(--paper)}
+.lk-state{display:flex;flex-direction:column;gap:1px;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:14px}
+.lk-state span{font-size:12.5px;opacity:.85}
+.lk-state.ok{background:#e9f7ef;color:#166534}.lk-state.wait{background:#fef3c7;color:#92400e}
+.lk-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.lk-grid a{display:grid;grid-template-columns:28px 1fr;grid-template-rows:auto auto;column-gap:8px;align-items:center;text-decoration:none;color:var(--ink);border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.lk-grid a:hover{border-color:var(--cur);background:color-mix(in srgb,var(--cur) 6%,var(--surface))}
+.lk-grid .ic{grid-row:1/3;font-size:20px;text-align:center}.lk-grid b{font-size:15px}.lk-grid small{font-size:11.5px;color:var(--muted)}
+.lk-relink{display:block;margin-top:12px;font-size:12.5px;color:var(--muted);text-align:right}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
@@ -346,10 +362,11 @@ table.endline td.tot{font-weight:900;font-size:17px}
   <p style="margin:8px 0;color:var(--muted);font-size:13px">依賽事規則：比賽 7 局或時間到為止，滿 45（複決賽 55）分鐘後不開新局；時間到時後攻在下半局領先即結束比賽。倒數到這些時間點會提醒紀錄員確認。</p>
   <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="ck-reset" hidden>取消計時</button><button class="btn" id="ck-cancel">關閉</button><button class="btn pri" id="ck-go">開始計時</button></div>
 </dialog>
-<dialog id="dlg-lk" style="width:560px"><h2 style="margin-bottom:4px">🔗 已連結本場</h2><div id="lk-title" style="font-weight:700;font-size:17px;margin-bottom:8px"></div>
-  <p id="lk-state" style="margin:0 0 10px;font-size:15px"></p>
-  <div class="qlinks" style="margin:0"><b>開啟本場：</b><span id="lk-links" style="display:contents"></span></div>
-  <div style="display:flex;align-items:center;gap:8px;margin-top:12px"><a href="#" id="lk-relink" style="font-size:13px;color:var(--muted)">連結錯了？重新選場次</a><span style="flex:1"></span><button class="btn" id="lk-close">關閉</button></div>
+<dialog id="dlg-lk" class="lk" style="width:480px">
+  <div class="lk-head"><div><small>已連結本場</small><div id="lk-title" class="lk-title"></div></div><button class="lk-x" id="lk-close" aria-label="關閉">✕</button></div>
+  <div id="lk-state" class="lk-state"></div>
+  <div class="lk-grid" id="lk-links"></div>
+  <a href="#" id="lk-relink" class="lk-relink">連結錯了？重新選場次</a>
 </dialog>
 <dialog id="dlg-pick"><h2>切換／刪除紀錄表</h2><p style="margin:0;color:var(--muted);font-size:15px">點紀錄表名稱切換；按「刪除」再按一次「確定刪除」才會刪掉，刪除前建議先匯出資料備份。</p><div class="list" id="pick-list"></div><div style="display:flex;justify-content:flex-end"><button class="btn" id="pick-close">關閉</button></div></dialog>
 <dialog id="dlg-sub"><h2>PH 代打</h2>
@@ -1003,9 +1020,12 @@ $('linkbtn').onclick = () => { if (!sh().link) { openUp('link'); return; } openL
 function openLinkMenu() {   // 已連結：只顯示同步狀態與跳到其他頁面；改場次要另外點「連結錯了？」
   const s = sh(), L = s.link, q = `?t=${encodeURIComponent(L.tid)}&g=${encodeURIComponent(L.gid)}`, p = partner(s);
   const n = repTodo(s).length + (p && p.link ? repTodo(p).length : 0);
-  $('lk-title').textContent = `第 ${L.gameNo} 場${p ? `｜${nickOf(s.side === 'away' ? s.team : p.team)}（先攻） vs ${nickOf(s.side === 'away' ? p.team : s.team)}（後攻）` : `｜${nickOf(s.team)}`}`;
-  $('lk-state').innerHTML = n ? `<b style="color:#b45309">⏳ 還有 ${n} 個半局的比分等待回報</b>：${esc(repErr || (!UPFB ? '沒有網路，連線後自動補送' : !UP.user ? '尚未登入紀錄員帳號' : '回報中…'))}` : '<b style="color:#15803d">✓ 比分已同步到逐局比分紀錄</b>；打序與落點也即時回報給後台資訊中控。';
-  $('lk-links').innerHTML = `<a href="score.html${q}">逐局比分紀錄</a><a href="index.html${q}">後台資訊中控</a><a href="admin.html${q}">賽務管理後台</a><a href="standings.html${q}">預賽排名看板</a>`;
+  const A = s.side === 'away' ? s : p, H = s.side === 'away' ? p : s;
+  $('lk-title').innerHTML = `<span class="lk-no">第 ${esc(L.gameNo)} 場</span>${p ? `<span class="lk-vs"><b>${esc(nickOf(A.team))}</b><em>先攻</em><i>vs</i><b>${esc(nickOf(H.team))}</b><em>後攻</em></span>` : `<span class="lk-vs"><b>${esc(nickOf(s.team))}</b></span>`}`;
+  $('lk-state').className = 'lk-state ' + (n ? 'wait' : 'ok');
+  $('lk-state').innerHTML = n ? `<b>⏳ 還有 ${n} 個半局等待回報</b><span>${esc(repErr || (!UPFB ? '沒有網路，連線後自動補送' : !UP.user ? '尚未登入紀錄員帳號' : '回報中…'))}</span>` : '<b>✓ 比分已同步</b><span>打序與落點也即時回報給後台資訊中控</span>';
+  const lk = (h, ic, t, d) => `<a href="${h}${q}"><span class="ic">${ic}</span><b>${t}</b><small>${d}</small></a>`;
+  $('lk-links').innerHTML = lk('score.html', '📋', '逐局比分紀錄', '本場比分與結束') + lk('index.html', '🎯', '後台資訊中控', '打者落點、防守準備') + lk('admin.html', '🗂', '賽務管理後台', '賽程、待匯入') + lk('standings.html', '🏆', '預賽排名看板', '分組積分與名次');
   $('dlg-lk').showModal();
 }
 $('lk-close').onclick = () => $('dlg-lk').close();
