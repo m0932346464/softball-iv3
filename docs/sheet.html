@@ -260,6 +260,7 @@ table.endline{border-collapse:collapse;font-size:15px;min-width:100%}
 table.endline th,table.endline td{border:1px solid var(--rule);padding:4px 8px;text-align:center}
 table.endline tbody th{text-align:left;white-space:nowrap}
 table.endline td.tot{font-weight:900;font-size:17px}
+.end-reasons[hidden]{display:none}
 .end-reasons{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:15px;margin-top:4px}
 .end-reasons label{display:flex;align-items:center;gap:4px}
 .ckrow{display:flex;align-items:center;gap:10px;margin:6px 0;font-weight:700}
@@ -1303,10 +1304,10 @@ function openEnd(reason, why) {
   $('end-clock').textContent = c ? `開賽 ${new Date(c.start).toTimeString().slice(0, 5)}・已進行 ${Math.floor(elapsedMin(c))} 分鐘（${c.mins} 分鐘制）` : '未使用比賽計時';
   if (e) {
     $('end-state').innerHTML = `<b>比賽已於 ${new Date(e.at).toTimeString().slice(0, 5)} 結束</b>（${esc(END_REASONS[e.reason] || e.reason)}）。${e.sent ? '已通知逐局比分紀錄標記「已結束」。' : '尚未通知逐局比分紀錄（離線或未連結），恢復連線後會自動補送。'}`;
-    $('end-reasons').hidden = true; $('end-ok').hidden = true; $('end-reopen').hidden = false;
+    $('end-reasons').hidden = true; $('end-ok').hidden = true; $('end-reopen').hidden = false; $('end-cancel').textContent = '離開';
   } else {
     $('end-state').innerHTML = H ? `確認後兩隊紀錄表都會鎖住不能再記新打席，把最後比分與「已結束」回報到逐局比分紀錄，並自動上傳兩隊紀錄表到管理後台「待匯入」（由後攻 ${esc(nickOf(H.team))} ${teamRuns(H)}：${teamRuns(A)} 先攻 ${esc(nickOf(A.team))}）。` : '確認後這張紀錄表會鎖住，不能再記新打席。';
-    $('end-reasons').hidden = false; $('end-ok').hidden = false; $('end-reopen').hidden = true;
+    $('end-reasons').hidden = false; $('end-ok').hidden = false; $('end-reopen').hidden = true; $('end-cancel').textContent = '繼續比賽';
     $('end-reasons').querySelectorAll('input').forEach(i => i.checked = i.value === (reason || (s.inning >= MAX_INN ? 'seven' : c && elapsedMin(c) >= c.mins ? 'time' : 'ump')));
   }
   if (!$('dlg-end').open) $('dlg-end').showModal();
