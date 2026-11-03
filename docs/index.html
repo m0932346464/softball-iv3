@@ -633,6 +633,16 @@ table.ps tfoot td{height:38px;font-weight:700;background:var(--sunk);border-top:
   .mast-bar>label{flex-direction:column!important;align-items:stretch!important;gap:2px!important;font-size:11px;min-width:0}
   .mast-bar>label>select{width:100%!important;min-width:0;font-size:13px}
 }
+/* 固定欄要用不透明底色，左右滑時不會透出後面的格子 */
+@media (max-width:900px){
+  table.ps tbody td:nth-child(-n+3),table.ps tfoot td:first-child{background:var(--surface)!important}
+  table.ps tbody tr:nth-child(even) td:nth-child(-n+3){background:color-mix(in srgb,var(--sunk) 45%,var(--surface))!important}
+  table.ps tbody tr.sub td:nth-child(-n+3){background:color-mix(in srgb,var(--sunk) 60%,var(--surface))!important}
+  table.ps thead tr:last-child th:nth-child(-n+3){background:var(--sunk)!important;z-index:2}
+  table.ps thead tr.g th:first-child,table.ps tfoot td:first-child{position:sticky;left:0;z-index:2}
+  table.ps thead tr.g th:first-child{background:var(--surface)}
+  table.ps tfoot td:first-child{background:var(--sunk)!important}
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
