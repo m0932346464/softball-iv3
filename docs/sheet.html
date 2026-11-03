@@ -972,7 +972,7 @@ async function upRender() {
     <div class="msg" id="up-msg">上傳後由管理員在後台「待匯入」確認匯入；之後修改紀錄表可以再上傳一次，管理員會看到最新的一份。</div>`;
   $('up-out').onclick = e => { e.preventDefault(); UPFB.auth.signOut(); };
   $('up-tid').onchange = async e => { UP.tid = e.target.value; UP.games = []; UP.gid = ''; UP.side = ''; await upLoadTour(); upRender(); };
-  $('up-gid').onchange = e => { UP.gid = e.target.value; UP.side = ''; upRender(); };
+  $('up-gid').onchange = e => { UP.gid = e.target.value; UP.side = ''; UP.confirmMove = ''; upRender(); };
   if ($('up-side')) $('up-side').onchange = e => { UP.side = e.target.value; upRender(); };
   $('up-ok').hidden = !(g && UP.side && (UPMODE === 'link' || P.pas.length));
   $('up-ok').textContent = UPMODE === 'link' ? '連結本場並自動回報比分' : '上傳';
@@ -987,9 +987,20 @@ $('linkbtn').onclick = () => openUp('link');
 $('up-close').onclick = () => $('dlg-up').close();
 $('up-ok').onclick = async () => {
   const g = UP.games.find(x => x.id === UP.gid); if (!g || !UP.side) return;
+  { /* 防呆：紀錄表上的兩隊要和所選場次相同；改連結別場要先確認 */
+    const s0 = sh(), p0 = partner(s0), nm = id => UP.teams[id] || '', same = (x, id) => x && (x.teamId ? x.teamId === id : normT(x.team) === normT(nm(id)));
+    const inG = x => same(x, g.awayId) || same(x, g.homeId), gName = `${nm(g.awayId)} vs ${nm(g.homeId)}`;
+    const bad = [s0, p0].filter(x => x && (x.team || x.teamId) && !inG(x));
+    if (bad.length) { upMsg(`第 ${g.gameNo} 場是 ${esc(gName)}，這張紀錄表是 ${esc(s0.team || '')}${p0 ? ' vs ' + esc(p0.team || '') : ''}，隊伍不符，不能連結或上傳到這一場。新的比賽請用「＋ 新紀錄表」建立`, true); return; }
+    if (p0 && (p0.team || p0.teamId) && same(s0, g.awayId) === same(p0, g.awayId)) { upMsg('這張紀錄表的兩隊對不上本場的先攻與後攻，請確認隊伍', true); return; }
+    const moved = s0.link && s0.link.gid !== g.id, had = moved && (Object.keys(s0.reported || {}).length || (p0 && Object.keys(p0.reported || {}).length));
+    if (had && UP.confirmMove !== g.id) { UP.confirmMove = g.id; upMsg(`這張紀錄表目前連結第 ${esc(s0.link.gameNo)} 場，已回報過比分。改連第 ${esc(g.gameNo)} 場後，第 ${esc(s0.link.gameNo)} 場的比分不會再更新（已回報的保留）。確定要改，請再按一次`, true); $('up-ok').textContent = '確定改連結'; return; }
+    UP.confirmMove = '';
+    UP.side = same(s0, g.awayId) ? 'away' : 'home';   // 本隊先後攻以賽程為準；現場對調請用「＋ 新紀錄表」選先攻隊
+  }
   if (UPMODE === 'link' || !sh().link) { const s = sh(), same = s.link && s.link.gid === g.id && s.link.side === UP.side;
-    s.link = { tid: UP.tid, gid: g.id, side: UP.side, gameNo: String(g.gameNo || ''), team: UP.teams[g[UP.side + 'Id']] || '' }; if (!same) s.reported = {};
-    const p = partner(s); if (p) { const os = UP.side === 'away' ? 'home' : 'away'; p.link = { tid: UP.tid, gid: g.id, side: os, gameNo: String(g.gameNo || ''), team: UP.teams[g[os + 'Id']] || '' }; if (!same) p.reported = {}; }
+    s.link = { tid: UP.tid, gid: g.id, side: UP.side, gameNo: String(g.gameNo || ''), team: UP.teams[g[UP.side + 'Id']] || '', ids: [g.awayId, g.homeId] }; if (!same) s.reported = {};
+    const p = partner(s); if (p) { const os = UP.side === 'away' ? 'home' : 'away'; p.link = { tid: UP.tid, gid: g.id, side: os, gameNo: String(g.gameNo || ''), team: UP.teams[g[os + 'Id']] || '', ids: [g.awayId, g.homeId] }; if (!same) p.reported = {}; }
     save(); render(); }
   if (UPMODE === 'link') { $('dlg-up').close(); toast(`已連結第 ${g.gameNo} 場（${UP.side === 'away' ? '先攻' : '後攻'}），每局結束會自動回報比分`); reportScores(); return; }
   if ((UP.tours || []).some(t => t.id === UP.tid && t.archived)) { upMsg('這一屆賽事已封存，不能再上傳；需要更正請聯絡管理員解除封存', true); return; }
@@ -1037,6 +1048,7 @@ function liveOf(s) {
 }
 async function reportLive(s) {
   if (!s || !s.link || !s.link.side || !UPFB || !UP.user || !['admin', 'scorer'].includes(UP.role) || (s.link.sidesPending || s.link.resetPending)) return;
+  if (s.teamId && s.link.ids && !s.link.ids.includes(s.teamId)) return;   // 隊伍和連結的場次不符：不回報打序與落點
   const L = liveOf(s), sig = JSON.stringify(L); if (sig === s.liveSig) return;
   try { await UPFB.db.collection('tournaments').doc(s.link.tid).collection('games').doc(s.link.gid).update({ ['live.' + s.link.side]: Object.assign(L, { at: Date.now() }), updatedAt: UPFB.TS() }); s.liveSig = sig; try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (_) {} } catch (_) {}
 }
@@ -1054,6 +1066,7 @@ async function reportOne(s) {
       if (!s.link.sidesPending && !s.link.resetPending) setTimeout(reportScores, 800);
       return;
     }
+    if (s.teamId && g.awayId && ![g.awayId, g.homeId].includes(s.teamId)) { repErr = `這張紀錄表的隊伍（${s.team || ''}）不在第 ${s.link.gameNo} 場，比分沒有回報；請重新連結正確的場次`; repBusy = false; repStatus(); return; }
     if (s.teamId && g[s.link.side + 'Id'] && g[s.link.side + 'Id'] !== s.teamId) {
       { repErr = '逐局比分紀錄上這場的先後攻和本紀錄表相反（可能被改過），請按「＋ 新紀錄表」重新選這場與先攻隊'; repBusy = false; repStatus(); return; }
     }
