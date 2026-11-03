@@ -558,6 +558,37 @@ body.fit.swap .left-col .sc-stats{gap:8px}
 .sc-stats .cb{line-height:1.2;font-size:12.5px}
 .sc-stats .st-bar{line-height:1.25}
 body.fit .sc-card{gap:6px}
+/* 紀錄表（紙本格式）重新排版 */
+.ps-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}.ps-top .ghost{margin-left:auto}
+.ps-lg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);align-items:center}
+.ps-lg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px;border:1px solid var(--rule)}
+.ps-lg .t{flex-basis:100%}
+table.ps{table-layout:fixed;width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
+table.ps th,table.ps td{border-bottom:1px solid var(--rule);padding:0!important;height:46px;text-align:center;white-space:nowrap}
+table.ps thead th{height:28px;font-size:12px;color:var(--muted);font-weight:700;background:var(--sunk)}
+table.ps thead tr.g th{height:22px;font-size:11px;letter-spacing:.1em;background:var(--surface)}
+table.ps th.grp,table.ps td.pa1{border-left:2px solid var(--line)}
+table.ps td.pa{border-left:1px solid var(--rule);padding:4px!important}
+table.ps td.pa.pa1{border-left:2px solid var(--line)}
+table.ps td.ord{font:700 15px var(--display);color:var(--muted)}
+table.ps td.no{font:700 17px var(--display)}
+table.ps td.nm,table.ps th.nm{text-align:left;padding-left:6px!important;overflow:hidden;text-overflow:ellipsis}
+table.ps td.nm small{display:block;font-size:11px;color:var(--muted)}
+table.ps tr.sub td{background:color-mix(in srgb,var(--sunk) 60%,transparent)}
+.subtag{font:700 11px var(--body);background:var(--accent);color:#fff;border-radius:4px;padding:1px 5px}
+table.ps td.st{font:700 16px var(--display);font-variant-numeric:tabular-nums}
+table.ps tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--sunk) 45%,transparent)}
+table.ps tfoot td{height:38px;font-weight:700;background:var(--sunk);border-top:2px solid var(--line)}
+.ps .cell{position:relative;height:100%;min-height:38px;border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05}
+.ps .cell b{font:700 17px var(--display);letter-spacing:.02em}
+.ps .cell span{font-size:11px;color:var(--muted);margin-top:2px}
+.ps .cell i.inn{position:absolute;left:4px;top:3px;font:700 10px var(--display);font-style:normal;color:var(--muted)}
+.ps .cell.hit,.ps-lg i.hit{background:color-mix(in srgb,#dc2626 13%,var(--surface))}.ps .cell.hit b{color:#b91c1c}
+.ps .cell.hr,.ps-lg i.hr{background:color-mix(in srgb,#7c3aed 16%,var(--surface))}.ps .cell.hr b{color:#6d28d9}
+.ps .cell.on,.ps-lg i.on{background:color-mix(in srgb,#0d9488 13%,var(--surface))}.ps .cell.on b{color:#0f766e}
+.ps .cell.out,.ps-lg i.out{background:color-mix(in srgb,#64748b 9%,var(--surface))}
+.ps .cell.k,.ps-lg i.k{background:color-mix(in srgb,#64748b 18%,var(--surface))}.ps .cell.k b{color:#475569}
+@media print{.ps .cell{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
@@ -736,8 +767,8 @@ body.fit .sc-card{gap:6px}
         <div class="spray-grid" id="spray-grid"></div>
       </div>
       <div class="pb tabpane" data-t="sheet" hidden>
-        <div class="inn-row"><span class="note">比照落點紀錄表：欄位一、二、三…為第幾輪打擊（格內小字為落點格位與局數）；結果代號 F 高飛接殺、G 滾地封殺、L 平飛接殺、FC 野選、GS 滾犧推進、DP 雙殺</span><span class="spacer"></span><button class="ghost sm" type="button" onclick="print()">列印</button></div>
-        <div class="tbl-wrap"><table class="sheet"><thead id="sheet-head"></thead><tbody id="sheet-rows"></tbody></table></div>
+        <div class="ps-top"><div class="ps-lg" id="sheet-lg"></div><button class="ghost sm" type="button" onclick="print()">列印</button></div>
+        <div class="tbl-wrap ps-wrap"><table class="sheet ps"><colgroup id="sheet-cols"></colgroup><thead id="sheet-head"></thead><tbody id="sheet-rows"></tbody><tfoot id="sheet-foot"></tfoot></table></div>
       </div>
       <div class="pb tabpane" data-t="box">
         <div class="tbl-wrap"><table class="box">
@@ -1511,14 +1542,22 @@ function renderSheet() {
   const skip = new Map();
   if (L.length) for (let j = 1; j < mine.length; j++) { const a = mine[j - 1], b = mine[j]; if (a.slot && b.slot) { const exp = a.slot % L.length + 1; if (b.slot !== exp) skip.set(b.id, exp); } }
   const CN = '一二三四五六七八九十';
-  $('sheet-head').innerHTML = `<tr><th>棒次</th><th>背號</th><th class="nm">姓名</th>${cols.map((c, k) => `<th class="${k ? '' : 'grp'}" title="第${CN[c.r] || c.r + 1}輪打擊">${CN[c.r] || c.r + 1}</th>`).join('')}<th class="grp">打數</th><th>安打</th><th>得分</th><th>打點</th></tr>`;
+  const kind = b => ['1B', '2B', '3B'].includes(b.result) ? 'hit' : b.result === 'HR' ? 'hr' : ['BB', 'E', 'FC'].includes(b.result) ? 'on' : b.result === 'K' ? 'k' : 'out';
+  $('sheet-cols').innerHTML = `<col style="width:46px"><col style="width:52px"><col style="width:118px">${cols.map(() => '<col>').join('')}<col style="width:54px"><col style="width:54px"><col style="width:54px"><col style="width:54px">`;
+  $('sheet-head').innerHTML = `<tr class="g"><th colspan="3"></th><th colspan="${cols.length}" class="grp">打擊（第幾輪）</th><th colspan="4" class="grp">本場</th></tr>
+    <tr><th>棒次</th><th>背號</th><th class="nm">姓名</th>${cols.map((c, k) => `<th class="${k ? '' : 'grp'}">${CN[c.r] || c.r + 1}</th>`).join('')}<th class="grp">打數</th><th>安打</th><th>得分</th><th>打點</th></tr>`;
   const warn = skip.size ? `<tr><td colspan="${cols.length + 7}" class="skip-note">⚠ 有 ${skip.size} 個打席的棒次不連續（紅框）：請到「明細」確認打者是否記錯，或是否有代打、跳棒。</td></tr>` : '';
+  const T = { ab: 0, h: 0, r: 0, rbi: 0 };
   $('sheet-rows').innerHTML = rows.length ? warn + rows.map(o => {
     const p = pById(o.id), bs = mine.filter(b => b.batterId === o.id), st = emptyLine({}); bs.forEach(b => addBall(st, b, FD));
-    return `<tr><td>${o.slot}</td><td><b>${esc(p ? p.no : '')}</b></td><td class="nm">${esc(p ? p.name : '')}${o.sub ? `<small class="note">（${fromOf(o.id, o.from)}局起）</small>` : ''}</td>${cols.map((c, k) => {
+    const r = mine.reduce((s, b) => s + ((b.run && b.run.scored) || []).filter(x => x === o.id).length, 0), rbi = bs.reduce((s, b) => s + ((b.run && b.run.rbi) || 0), 0);
+    T.ab += st.ab; T.h += st.h; T.r += r; T.rbi += rbi;
+    return `<tr class="${o.sub ? 'sub' : ''}"><td class="ord">${o.sub ? '<span class="subtag">代</span>' : o.slot}</td><td class="no">${esc(p ? p.no : '')}</td><td class="nm">${esc(p ? p.name : '')}${o.sub ? `<small>${fromOf(o.id, o.from)}局起</small>` : ''}</td>${cols.map((c, k) => {
       const b = bs.find(x => round.get(x.id) === c.r), sx = b && skip.get(b.id);
-      return `<td class="${k ? '' : 'pa1'}${sx ? ' skip' : ''}"${sx ? ` title="棒次不連續：這一筆前一棒之後應輪到第 ${sx} 棒"` : ''}>${b ? `<span class="c">${paperCode(b)}</span><span class="z">${hasLoc(b) ? esc(FD.zoneCode(b)) : '—'}<em class="inn">${b.inning || ''}局</em></span>` : ''}</td>`; }).join('')}<td class="pa1">${st.ab}</td><td>${st.h}</td><td>${mine.reduce((s, b) => s + ((b.run && b.run.scored) || []).filter(x => x === o.id).length, 0)}</td><td>${bs.reduce((s, b) => s + ((b.run && b.run.rbi) || 0), 0)}</td></tr>`;
+      return `<td class="pa ${k ? '' : 'pa1'}${sx ? ' skip' : ''}"${sx ? ` title="棒次不連續：這一筆前一棒之後應輪到第 ${sx} 棒"` : ''}>${b ? `<div class="cell ${kind(b)}"><i class="inn">${b.inning || ''}</i><b>${paperCode(b)}</b><span>${hasLoc(b) ? esc(FD.zoneCode(b)) : ''}</span></div>` : ''}</td>`; }).join('')}<td class="st pa1">${st.ab}</td><td class="st">${st.h || ''}</td><td class="st">${r || ''}</td><td class="st">${rbi || ''}</td></tr>`;
   }).join('') : `<tr><td colspan="${cols.length + 7}" class="empty">尚未排打序或尚無紀錄</td></tr>`;
+  $('sheet-foot').innerHTML = rows.length ? `<tr><td colspan="3" class="nm">合計</td>${cols.map((c, k) => `<td class="${k ? '' : 'pa1'}"></td>`).join('')}<td class="st pa1">${T.ab}</td><td class="st">${T.h}</td><td class="st">${T.r}</td><td class="st">${T.rbi}</td></tr>` : '';
+  $('sheet-lg').innerHTML = '<span><i class="hit"></i>安打</span><span><i class="hr"></i>全壘打</span><span><i class="on"></i>保送・失誤・野選</span><span><i class="out"></i>出局</span><span><i class="k"></i>三振</span><span class="t">格內：左上局數｜代號｜落點格位。F 高飛、G 滾地、L 平飛、FS 高犧、GS 滾犧、DP 雙殺</span>';
 }
 /* ---------- 賽事轉播稿：把整場打席紀錄整理成轉播員口吻，並可匯出 ---------- */
 const CN_N = n => '零一二三四五六七八九十'[n] || String(n);
