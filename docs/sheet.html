@@ -677,8 +677,9 @@ function render() {
   ['team', 'field', 'weather', 'wind', 'date', 'time'].forEach(k => { const el = $('h-' + k); if (document.activeElement !== el) el.value = s[k] || ''; });
   teamBadge();   // 切換紀錄表或建立新比賽後，名單人數要跟著換成這一隊
   { const e = endedOf(s), eb = $('endbtn'); eb.textContent = e ? '🏁 已結束' : '🏁 比賽結束'; eb.className = 'btn' + (e ? ' ended' : ''); document.querySelector('.app').classList.toggle('ended', !!e && !s.rows[c.r].res[c.c]);
-    if (e && !s.rows[c.r].res[c.c]) { $('hint').innerHTML = `<span class="waitmsg">🏁 比賽已結束（${esc(END_REASONS[e.reason] || '')}）：只能查看或修改已記的格子。記得按「☁ 上傳」</span>`; $('pq').hidden = true; } }
+    if (e && !s.rows[c.r].res[c.c]) { $('hint').innerHTML = `<span class="waitmsg">🏁 比賽已結束（${esc(END_REASONS[e.reason] || '')}）：只能查看或修改已記的格子；改過的話按「☁ 重新上傳」</span>`; $('pq').hidden = true; } }
   if (typeof tickClock === 'function') { tickClock(); setTimeout(checkWalkoff, 0); }
+  if (typeof renderUpState === 'function') renderUpState();
   $('sheets').textContent = sheetShort(s) + ' ▾'; $('sheets').title = sheetName(s);
   $('inn-n').textContent = s.inning || 1; setFocus(s);
   { const h = $('inn-h'), pr = !!partner(s); h.hidden = !pr; if (pr) { const up = s.side === 'away'; h.className = 'ih ' + (up ? 'top' : 'bot'); h.textContent = up ? '▲上' : '▼下'; h.title = up ? '上半局：先攻隊進攻' : '下半局：後攻隊進攻'; } }
@@ -1015,7 +1016,7 @@ function repStatus() {
   b.className = 'btn wait'; b.textContent = `🔗 ${who} ⏳${n}局`;
   b.title = full + '：' + (repErr || (!UPFB ? '沒有網路，連線後自動補送' : !UP.user ? '尚未登入紀錄員帳號：點這裡登入後自動補送' : '回報中…'));
 }
-async function reportScores() { const s = sh(), p = partner(s); await reportLive(s); if (p) await reportLive(p); await reportOne(s); if (p) await reportOne(p); if (endedOf(s) && !endedOf(s).sent) await reportEnd(); }
+async function reportScores() { const s = sh(), p = partner(s); await reportLive(s); if (p) await reportLive(p); await reportOne(s); if (p) await reportOne(p); if (endedOf(s) && !endedOf(s).sent) await reportEnd(); if (endedOf(s) && !endedOf(s).uploaded) await autoUpload(); }
 /* 即時打序：把本隊目前打序、下一棒與本場每個打席（局、落點、結果）寫到該場，供後台資訊中控「比賽中・防守準備」查詢 */
 function liveOf(s) {
   const keep = DB.cur; DB.cur = s.id; let d = null; try { d = due(); } catch (_) {} DB.cur = keep;
@@ -1280,7 +1281,7 @@ function openEnd(reason, why) {
     $('end-state').innerHTML = `<b>比賽已於 ${new Date(e.at).toTimeString().slice(0, 5)} 結束</b>（${esc(END_REASONS[e.reason] || e.reason)}）。${e.sent ? '已通知逐局比分紀錄標記「已結束」。' : '尚未通知逐局比分紀錄（離線或未連結），恢復連線後會自動補送。'}`;
     $('end-reasons').hidden = true; $('end-ok').hidden = true; $('end-reopen').hidden = false;
   } else {
-    $('end-state').innerHTML = H ? `確認後兩隊紀錄表都會鎖住不能再記新打席，並把最後比分與「已結束」回報到逐局比分紀錄（由後攻 ${esc(nickOf(H.team))} ${teamRuns(H)}：${teamRuns(A)} 先攻 ${esc(nickOf(A.team))}）。` : '確認後這張紀錄表會鎖住，不能再記新打席。';
+    $('end-state').innerHTML = H ? `確認後兩隊紀錄表都會鎖住不能再記新打席，把最後比分與「已結束」回報到逐局比分紀錄，並自動上傳兩隊紀錄表到管理後台「待匯入」（由後攻 ${esc(nickOf(H.team))} ${teamRuns(H)}：${teamRuns(A)} 先攻 ${esc(nickOf(A.team))}）。` : '確認後這張紀錄表會鎖住，不能再記新打席。';
     $('end-reasons').hidden = false; $('end-ok').hidden = false; $('end-reopen').hidden = true;
     $('end-reasons').querySelectorAll('input').forEach(i => i.checked = i.value === (reason || (s.inning >= MAX_INN ? 'seven' : c && elapsedMin(c) >= c.mins ? 'time' : 'ump')));
   }
@@ -1293,8 +1294,9 @@ $('end-ok').onclick = async () => {
   snap(); const e = { at: Date.now(), reason: r, sent: false };
   [s, p].forEach(x => { if (x) { if (x.cur && x.cur.k === 'stat') x.cur.k = 'loc'; x.ended = Object.assign({}, e); } });
   save(); render(); $('dlg-end').close();
-  toast(`比賽結束：${END_REASONS[r]}。記得按「☁ 上傳」把兩隊紀錄表送到管理後台`);
-  reportEnd();
+  if (!s.link) { toast(`比賽結束：${END_REASONS[r]}。這張紀錄表沒有連結場次，請選場次後上傳`); setTimeout(() => openUp('upload'), 600); return; }
+  toast(`比賽結束：${END_REASONS[r]}。正在回報比分並上傳兩隊紀錄表…`);
+  await reportEnd(); await autoUpload();
 };
 $('end-reopen').onclick = () => {
   const s = sh(), p = partner(s), e = endedOf(s);
@@ -1302,6 +1304,39 @@ $('end-reopen').onclick = () => {
   toast(e && e.sent ? '已重新開啟紀錄表；逐局比分紀錄上這場已標記結束，需由紀錄員在逐局比分紀錄按「重新開啟」才能再回報' : '已重新開啟，可以繼續記錄');
 };
 /* 比賽結束：先把最後一個半局的比分補回報，再把場次標記為「已結束」 */
+
+/* 比賽結束後自動上傳兩隊紀錄表到「待匯入」；沒網路或未登入就記著，之後自動補傳 */
+let upBusy = false;
+async function autoUpload() {
+  const s = sh(), p = partner(s), e = endedOf(s);
+  if (!e || e.uploaded || upBusy || !s.link || !UPFB || !UP.user || !['admin', 'scorer'].includes(UP.role)) { renderUpState(); return; }
+  upBusy = true;
+  try {
+    const T = UPFB.db.collection('tournaments').doc(s.link.tid), td = (await T.get()).data() || {};
+    if (td.archived) { toastMid('這一屆賽事已封存，紀錄表沒有上傳；需要更正請聯絡管理員解除封存'); upBusy = false; return; }
+    await pushPending();
+    const g = Object.assign({ id: s.link.gid }, (await T.collection('games').doc(s.link.gid).get()).data() || {});
+    const done = [];
+    for (const x of [s, p]) {
+      if (!x || !x.link || !x.rows.some(r => r.res.some(Boolean))) continue;
+      if (x.upload && x.upload.gid === g.id && x.upload.sig === sigOf(x)) continue;   // 這份已上傳過且沒改過
+      const side = x.link.side, P = buildPayload(x), ref = T.collection('uploads').doc();
+      await ref.set({ gameId: g.id, gameNo: String(g.gameNo || ''), teamId: g[side + 'Id'] || x.teamId || '', side, sheetId: x.id, team: x.team || '', date: x.date || '', paCount: P.pas.length,
+        runs: P.innings.reduce((a, b) => a + b, 0), payload: JSON.stringify(P), status: 'pending', createdBy: UP.user.uid, createdByName: UP.name || UP.user.email || '', createdAt: UPFB.TS(), at: Date.now(), auto: true });
+      x.upload = { id: ref.id, tid: s.link.tid, gid: g.id, side, at: Date.now(), sig: 0 }; x.upload.sig = sigOf(x);
+      done.push(nickOf(x.team));
+    }
+    [s, p].forEach(x => { if (x && x.ended) x.ended.uploaded = true; });
+    try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (_) {}
+    render();
+    toastMid(done.length ? `已上傳第 ${g.gameNo || ''} 場：${done.join('、')} 紀錄表，等管理員在「待匯入」匯入` : '紀錄表先前已上傳，內容沒有變動', 3500);
+  } catch (err) { repErr = err && err.code === 'permission-denied' ? '沒有權限上傳紀錄表（帳號需為紀錄員或管理員）' : '紀錄表還沒上傳，恢復連線後自動補傳'; repStatus(); }
+  upBusy = false; renderUpState();
+}
+function renderUpState() {   // 比賽已結束但紀錄表還沒送出：上傳按鈕標示待送
+  const e = endedOf(sh()), b = $('upbtn'); if (!b || !e || e.uploaded) return;
+  b.textContent = '☁ 待上傳'; b.title = !UPFB ? '沒有網路，連線後自動上傳' : !UP.user ? '尚未登入紀錄員帳號，登入後自動上傳' : '上傳中或稍後重試；也可以按這裡手動上傳';
+}
 async function reportEnd() {
   const s = sh(), p = partner(s), e = endedOf(s); if (!e || e.sent || !s.link || !UPFB || !UP.user || !['admin', 'scorer'].includes(UP.role)) { repStatus(); return; }
   try {
