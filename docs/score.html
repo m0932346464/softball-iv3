@@ -463,7 +463,7 @@ document.getElementById('board').addEventListener('click', e => {
   const g = D.games.find(x => x.id === b.dataset.ana); if (!g) return;
   document.getElementById('ana-title').textContent = `賽後統計分析・第 ${g.gameNo || ''} 場`;
   document.getElementById('ana-sub').textContent = `${teamName(g.awayId)} ${g.awayScore ?? ''} : ${g.homeScore ?? ''} ${teamName(g.homeId)}`;
-  document.getElementById('ana-frame').src = ANA_PAGE + '?t=' + encodeURIComponent(U.tid) + '&g=' + encodeURIComponent(g.id) + '&embed=1#detail';
+  document.getElementById('ana-frame').src = ANA_PAGE + '?t=' + encodeURIComponent(U.tid) + '&g=' + encodeURIComponent(g.id) + '&embed=1&v=' + Date.now() + '#detail';   // v=：每次開啟都讀最新版，避免瀏覽器用到舊的快取
   document.getElementById('ana-dlg').showModal();
 });
 document.getElementById('ana-close').onclick = () => { document.getElementById('ana-dlg').close(); document.getElementById('ana-frame').src = 'about:blank'; };
