@@ -1,0 +1,10 @@
+{
+  "name": "慢壘賽事紀錄系統",
+  "short_name": "慢壘紀錄",
+  "start_url": "score.html",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0e1d3a",
+  "theme_color": "#0e1d3a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#0e1d3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="慢壘紀錄">
+<title>逐局比分紀錄</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+.fs-btn{border:1px solid var(--mast-2,#2a3a5c);background:transparent;color:var(--mast-ink,#fff);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+.fs-btn:hover{background:var(--mast-2,#2a3a5c)}
+</style>
+<link rel="stylesheet" href="common.css">
+<style>
+.board-list{display:flex;flex-direction:column;gap:12px}
+.gcard{background:var(--surface);border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.gcard.live{box-shadow:inset 4px 0 0 var(--r1)}
+.gcard.final{opacity:.92}
+.gcard.mine{border:3px solid var(--accent);box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 25%,transparent)}
+.gcard.mine .ghead{background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.mine-tag{font-size:12px;font-weight:700;color:var(--accent);margin-right:8px;white-space:nowrap}
+.gcard.focus{box-shadow:0 0 0 3px var(--accent);transition:box-shadow .3s;position:relative}
+.focus-tag{background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.ghead{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 14px;border-bottom:1px solid var(--rule);background:var(--sunk)}
+.ghead .time{font-family:var(--display);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.ghead .round{font-size:12px;color:var(--muted)}
+.ghead .spacer{flex:1}
+.ls-wrap{overflow-x:auto}
+table.ls{border-collapse:collapse;width:100%;min-width:640px;font-variant-numeric:tabular-nums;table-layout:fixed}
+table.ls col.c-tm{width:230px}table.ls col.c-r{width:64px}table.ls col.c-w{width:52px}
+@media (max-width:760px){table.ls col.c-tm{width:120px}table.ls col.c-r{width:48px}table.ls col.c-w{width:36px}}
+table.ls th,table.ls td{border-bottom:1px solid var(--rule);padding:0;text-align:center;font-size:13px;white-space:nowrap}
+table.ls th{font-size:11px;color:var(--muted);font-weight:700;padding:6px 0;background:var(--surface);position:static}
+table.ls td.tm{text-align:left;padding:8px 10px 8px 14px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+table.ls td.tm small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+table.ls input{width:100%;min-width:38px;height:44px;border:0;border-left:1px solid var(--rule);border-radius:0;text-align:center;font:600 18px var(--display);background:transparent;color:var(--ink);padding:0}
+table.ls input:focus{background:color-mix(in srgb,var(--accent) 12%,transparent);outline:none}
+table.ls input:disabled{color:var(--ink);opacity:1}
+table.ls td.ip-on input{box-shadow:inset 0 0 0 2px var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+/* 局數格大按鈕輸入 */
+.ipop{position:absolute;z-index:30;width:230px;background:var(--surface);border:1px solid var(--rule);border-radius:12px;box-shadow:0 14px 32px rgba(0,0,0,.22);padding:10px;display:flex;flex-direction:column;gap:8px}
+.ip-h{font-size:12px;color:var(--muted)}
+.ip-s{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ip-s button{width:52px;height:48px;border-radius:10px;border:1px solid var(--rule);background:var(--sunk);font-size:24px;font-weight:700;color:var(--ink);cursor:pointer}
+.ip-s b{font:700 38px/1 var(--display);min-width:52px;text-align:center;font-variant-numeric:tabular-nums}
+.ip-q{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+.ip-q button{height:34px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:700 16px var(--display);color:var(--ink);cursor:pointer}
+.ip-q button[aria-pressed="true"]{background:var(--navy);color:var(--navy-ink);border-color:var(--navy)}
+.ip-f{display:flex;gap:6px}.ip-f button{flex:1;height:36px}
+table.ls td.later input,table.ls td.ext.later input{background:repeating-linear-gradient(135deg,transparent 0 6px,color-mix(in srgb,var(--rule) 55%,transparent) 6px 7px);cursor:not-allowed}
+table.ls td.next input{box-shadow:inset 0 0 0 2px var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+table.ls th.ext,table.ls td.ext input{background:color-mix(in srgb,var(--sunk) 70%,transparent)}
+table.ls td.r{font:700 22px var(--display);min-width:56px;border-left:2px solid var(--line)}
+table.ls td.win{min-width:44px;font-size:12px;color:var(--r3);font-weight:700}
+.gfoot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px}
+.gfoot label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.gfoot input{width:140px}
+.swap{border:1px dashed var(--accent);background:transparent;color:var(--accent);border-radius:999px;padding:2px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+.swap:hover{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.recorder{font-size:13px;color:var(--muted);display:inline-flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline}
+.recorder .mod{font-size:12px;font-variant-numeric:tabular-nums}.recorder b{color:var(--ink);font-weight:500}
+.photo-btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:1px dashed var(--accent);border-radius:6px;color:var(--accent);background:transparent;font-size:13px;font-weight:700;cursor:pointer}
+.photo-btns{display:inline-flex;gap:6px;flex-wrap:wrap}
+.photo-lbl{font-size:12px}
+.photo-thumb .photo-btn{min-height:30px;padding:0 9px;font-size:12px}
+.photo-thumb{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.photo-thumb img{height:44px;width:auto;border-radius:4px;border:1px solid var(--rule);cursor:zoom-in}
+.photo-thumb button{font-size:12px;min-height:28px;padding:0 8px}
+.photo-view{position:fixed;inset:0;z-index:50;background:rgba(10,15,30,.85);display:grid;place-items:center;padding:16px}
+.photo-view img{max-width:100%;max-height:calc(100vh - 80px);border-radius:6px}
+.photo-view .bar{position:absolute;top:12px;right:12px;display:flex;gap:8px}
+.to-spray{display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border-radius:6px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;font-size:13px}
+.to-spray:hover{filter:brightness(1.08)}
+button.to-spray{border:0;cursor:pointer;font-family:inherit}
+.ana-dlg{width:min(1320px,96vw);height:92vh;max-height:92vh;padding:0;border:0;border-radius:14px;overflow:hidden;display:none;flex-direction:column;background:var(--bg,#f3f5f8)}
+.ana-dlg[open]{display:flex}
+.ana-dlg::backdrop{background:rgba(10,17,32,.55)}
+.ana-h{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--mast,#0e1d3a);color:#fff}
+.ana-h .note{color:#9fb0cf;font-size:13px}.ana-h .spacer{flex:1}
+.ana-h button{background:#fff;color:#13203a;border-radius:8px;padding:6px 14px;font-weight:700}
+#ana-frame{flex:1;border:0;width:100%;background:var(--bg,#f3f5f8)}
+.readonly-note{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--r2);border-radius:6px;padding:10px 14px;font-size:13px}
+@media (max-width:760px){table.ls{min-width:520px}table.ls td.tm{padding-left:10px;font-size:12px}table.ls input{min-width:0;height:42px}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>const ANA_PAGE = 'index.html';   /* 後台資訊中控頁（示範版打包時改為 scorer.html） */</script>
+</head>
+<body>
+
+<header class="mast">
+  <div class="in mast-top">
+    <h1>逐局比分紀錄</h1>
+    <div class="who">
+      <span class="sync" id="sync"><i></i><span id="sync-txt">已同步</span></span>
+      <span id="who-email"></span>
+      <a href="standings.html" style="color:var(--mast-ink)">預賽排名看板</a>
+      <a href="sheet.html" style="color:var(--mast-ink)">打擊落點紀錄</a>
+      <a href="index.html" style="color:var(--mast-ink)">後台資訊中控</a>
+      <a href="admin.html" id="to-admin" hidden style="color:var(--mast-ink)">賽務管理後台</a>
+      <button id="login-btn" type="button" hidden>紀錄員登入</button>
+      <button id="fs-btn" type="button" class="fs-btn" title="全螢幕顯示（再按一次或按 Esc 離開）">⛶ 全螢幕</button>
+      <button id="logout" type="button" hidden>登出</button>
+    </div>
+  </div>
+  <div class="in mast-bar">
+    <label for="sel-t" class="w-t">賽事<select id="sel-t"></select></label>
+    <label>日期<div class="seg" id="sel-d"></div></label>
+    <label>場地<div class="seg" id="sel-f"></div></label>
+  </div>
+</header>
+
+<div class="in page">
+  <div id="setup" class="readonly-note" hidden>尚未連接資料庫：請在 config.js 貼上 Firebase 專案設定。</div>
+  <div id="ro" class="readonly-note" hidden>目前為唯讀檢視。紀錄員請按右上角「紀錄員登入」後即可輸入各局比分。</div>
+
+  <div id="gate" class="gate" hidden style="min-height:auto">
+    <div class="panel" style="max-width:380px;width:100%">
+      <div class="ph"><h2>紀錄員登入</h2><button class="ghost" type="button" id="gate-close">取消</button></div>
+      <div class="pb">
+        <form id="login-form">
+          <input id="li-email" type="email" placeholder="Email" autocomplete="username" required>
+          <input id="li-pass" type="password" placeholder="密碼" autocomplete="current-password" required>
+          <button class="primary" type="submit">登入</button>
+          <p class="err" id="li-err"></p>
+          <p class="note" style="text-align:center;margin:0">第一次使用？<a href="signup.html">前往紀錄員註冊頁</a></p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="board-list" id="board"></div>
+</div>
+<div class="toast" id="toast" aria-live="polite"></div>
+<div class="ipop" id="ipop" hidden role="dialog" aria-label="輸入本局得分">
+  <div class="ip-h" id="ip-h"></div>
+  <div class="ip-s"><button type="button" data-d="-1" aria-label="減 1">−</button><b id="ip-v">0</b><button type="button" data-d="1" aria-label="加 1">＋</button></div>
+  <div class="ip-q"></div>
+  <div class="ip-f"><button type="button" class="ghost" data-clear="1">清除</button><button type="button" class="primary" data-ok="1">完成</button></div>
+</div>
+
+<script>
+'use strict';
+const LS = 'sb-board-v1', INN = 9, REG = 7;
+const U = { tid: '', day: '', field: '' };
+try { Object.assign(U, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (_) {}
+const saveU = () => { try { localStorage.setItem(LS, JSON.stringify(U)); } catch (_) {} };
+/* 從後台資訊中控回來：直接切到那一場的日期與場地，並捲到該場 */
+let focusG = '', keepG = '';   // keepG：從其他頁帶過來的場次，持續框選
+{ const q = new URLSearchParams(location.search); let nav = null;
+  try { nav = JSON.parse(localStorage.getItem('sb-nav-back') || 'null'); localStorage.removeItem('sb-nav-back'); } catch (_) {}
+  if (q.get('t')) { U.tid = q.get('t'); focusG = q.get('g') || ''; history.replaceState(null, '', location.pathname); }
+  else if (nav && Date.now() - nav.at < 60000 && nav.g) { U.tid = nav.t; focusG = nav.g; } }
+const D = { tournaments: [], teams: new Map(), games: [], canEdit: false, photos: new Map(), email: '' };
+const canEd = () => { const t = D.tournaments.find(x => x.id === U.tid); return D.canEdit && !(t && t.archived); };   // 已封存的賽事只能查看
+let unsub = [];
+const teamName = id => (D.teams.get(id) || {}).name || '—';
+const dayKey = g => { const t = tpe(g.scheduledAt); return t ? `${t.m}/${t.d}` : '未排定'; };
+const hhmm = g => { const t = tpe(g.scheduledAt); return t ? `${t.hh}:${t.mm}` : ''; };
+
+/* ---------- 啟動 ---------- */
+if (!FB.ready) $('setup').hidden = false;
+else {
+  FB.auth.onAuthStateChanged(async user => {
+    let role = 'none';
+    if (user) { try { role = await ensureUser(user); } catch (e) { toast(friendlyError(e)); } }
+    D.canEdit = ['admin', 'scorer'].includes(role); D.email = user ? myName() : '';
+    $('who-email').textContent = user ? myName() : '';
+    $('logout').hidden = !user; $('login-btn').hidden = !!user; $('to-admin').hidden = role !== 'admin';
+    $('ro').hidden = D.canEdit; $('gate').hidden = true;
+    if (user && !D.canEdit) toast('此帳號尚未開通為紀錄員，目前只能檢視');
+    if (!D.tournaments.length) loadTournaments(); else renderBoard();
+  });
+}
+$('login-btn').onclick = () => { $('gate').hidden = false; $('li-email').focus(); };
+$('gate-close').onclick = () => $('gate').hidden = true;
+$('login-form').addEventListener('submit', async e => {
+  e.preventDefault(); $('li-err').textContent = '';
+  try { await FB.auth.signInWithEmailAndPassword($('li-email').value.trim(), $('li-pass').value); } catch (err) { $('li-err').textContent = friendlyError(err); }
+});
+$('logout').onclick = () => FB.auth.signOut();
+
+async function loadTournaments() {
+  const s = await FB.db.collection('tournaments').get();
+  D.tournaments = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')));
+  if (!D.tournaments.some(t => t.id === U.tid)) U.tid = D.tournaments[0]?.id || '';
+  $('sel-t').innerHTML = D.tournaments.length ? D.tournaments.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('') : '<option value="">尚無賽事</option>';
+  $('sel-t').value = U.tid;
+  open_();
+}
+function open_() {
+  unsub.forEach(f => f()); unsub = [];
+  if (!U.tid) { renderBoard(); return; }
+  unsub.push(col(U.tid, 'teams').onSnapshot(s => { D.teams = new Map(s.docs.map(d => [d.id, { id: d.id, ...d.data() }])); renderBoard(); }));
+  unsub.push(col(U.tid, 'photos').onSnapshot(s => { D.photos = new Map(s.docs.map(d => [d.id, d.data()])); renderBoard(); }, () => {}));
+  unsub.push(col(U.tid, 'games').onSnapshot({ includeMetadataChanges: true }, s => {
+    D.games = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.scheduledAt?.seconds || 0) - (b.scheduledAt?.seconds || 0) || String(a.field || '').localeCompare(String(b.field || '')));
+    const pend = s.metadata.hasPendingWrites;
+    $('sync').className = 'sync' + (!navigator.onLine ? ' off' : pend ? ' pending' : '');
+    $('sync-txt').textContent = !navigator.onLine ? '離線（暫存在裝置）' : pend ? '上傳中…' : '已同步';
+    renderBoard();
+  }));
+  saveU();
+}
+
+/* ---------- 畫面 ---------- */
+function seg(el, items, cur, onPick) {
+  el.innerHTML = items.map(v => `<button type="button" data-v="${esc(v)}" aria-pressed="${v === cur}">${esc(v)}</button>`).join('');
+  el.onclick = e => { const v = e.target.closest('button')?.dataset.v; if (v != null) onPick(v); };
+}
+function renderBoard() {
+  const fg = focusG && D.games.find(g => g.id === focusG);
+  if (fg) keepG = fg.id;
+  if (fg) { U.day = dayKey(fg); U.field = fg.field || '未指定'; U.cur = fg.id; saveU(); }
+  const days = [...new Set(D.games.map(dayKey))];
+  if (!days.includes(U.day)) {
+    const tn = tpe(new Date()), today = `${tn.m}/${tn.d}`;
+    U.day = days.includes(today) ? today : days[0] || '';
+  }
+  const fields = [...new Set(D.games.filter(g => dayKey(g) === U.day).map(g => g.field || '未指定'))].sort();
+  if (!fields.includes(U.field)) U.field = fields[0] || '';
+  seg($('sel-d'), days, U.day, v => { U.day = v; saveU(); renderBoard(); });
+  seg($('sel-f'), fields, U.field, v => { U.field = v; saveU(); renderBoard(); });
+  const list = D.games.filter(g => dayKey(g) === U.day && (g.field || '未指定') === U.field);
+  const active = document.activeElement && document.activeElement.closest('.gcard') ? document.activeElement : null;
+  if (active && active.dataset.k) return;   // 正在輸入時不重畫，避免游標跳掉
+  $('board').innerHTML = list.length ? list.map(card).join('')
+    : `<div class="empty-state"><b>這個場地今天沒有場次</b>請到管理後台「賽程比分」建立或匯入場次</div>`;
+  if (fg) { focusG = ''; keepG = fg.id; const el = document.querySelector(`.gcard[data-id="${fg.id}"]`); if (el) el.scrollIntoView({ block: 'center' }); }
+}
+function card(g) {
+  const inn = g.innings || {}, t = lineTotals(g), dis = canEd() ? '' : 'disabled';
+  const aS = g.awayScore ?? (t.innings ? t.away : null), hS = g.homeScore ?? (t.innings ? t.home : null);
+  const win = g.status === 'final' && aS != null && hS != null ? (aS > hS ? 'away' : hS > aS ? 'home' : 'tie') : '';
+  const cells = side => Array.from({ length: INN }, (_, i) => {
+    const v = (inn[side] || [])[i];
+    const k = halfOrd(i + 1, side), nh = nextHalf(g), later = canEd() && g.status !== 'final' && k > nh;
+    return `<td class="${i >= REG ? 'ext' : ''}${later ? ' later' : ''}${canEd() && k === nh && g.status !== 'final' ? ' next' : ''}"><input ${dis || (later ? 'disabled' : '')} ${later ? `title="請先登錄${halfName(nh)}的得分"` : ''} inputmode="${coarse ? 'none' : 'numeric'}" pattern="[0-9]*" maxlength="2" data-g="${g.id}" data-k="${side}" data-i="${i}" value="${v ?? ''}" aria-label="${side === 'away' ? '客隊' : '主隊'}第${i + 1}局得分"></td>`;
+  }).join('');
+  const row = (side, id, score) => `<tr><td class="tm">${esc(teamName(id))}<small>${side === 'away' ? '先攻' : '後攻'}</small></td>${cells(side)}<td class="r">${score ?? ''}</td><td class="win">${win === side ? '勝' : win === 'tie' ? '和' : ''}</td></tr>`;
+  return `<section class="gcard ${g.status || ''} ${g.id === U.cur && g.status !== 'final' ? 'mine' : ''} ${g.id === keepG ? 'focus' : ''}" data-id="${g.id}">
+    <div class="ghead"><span class="time">${hhmm(g)}</span>${g.id === keepG ? '<span class="focus-tag">目前查看的場次</span>' : ''}<span><b>${esc(teamName(g.awayId))}</b> vs <b>${esc(teamName(g.homeId))}</b></span>${canEd() && canSwapSides(g) ? `<button class="swap" type="button" data-act="swap" data-g="${g.id}" title="現場決定先後攻後，按此對調">⇄ 交換先後攻</button>` : ''}
+      <span class="round">${g.gameNo ? '#' + esc(g.gameNo) + '・' : ''}${esc(g.round || '')}</span><span class="spacer"></span>
+      ${g.id === U.cur && g.status !== 'final' ? '<span class="mine-tag">● 本機紀錄中</span>' : ''}<span class="badge ${g.status === 'live' ? 'live' : g.status === 'final' ? 'final' : ''}">${STATUS[g.status || 'scheduled']}</span>${g.status === 'final' && g.endReason ? `<span class="note" style="font-size:12px">${esc(g.endReason)}</span>` : ''}</div>
+    <div class="ls-wrap"><table class="ls"><colgroup><col class="c-tm">${'<col>'.repeat(INN)}<col class="c-r"><col class="c-w"></colgroup><thead><tr><th style="text-align:left;padding-left:14px">隊名</th>${Array.from({ length: INN }, (_, i) => `<th class="${i >= REG ? 'ext' : ''}">${i + 1}</th>`).join('')}<th>合計</th><th>勝隊</th></tr></thead>
+      <tbody>${row('away', g.awayId, aS)}${row('home', g.homeId, hS)}</tbody></table></div>
+    <div class="gfoot">
+      <span class="recorder">記錄員：<b>${g.recorder ? esc(g.recorder) : g.status === 'final' ? '—' : '<span class="note">（開始紀錄後自動帶入）</span>'}</b>${g.updatedAt && g.updatedAt.seconds ? `<span class="mod">最後修改 ${fmtDT(g.updatedAt)}</span>` : ''}</span>
+      <span class="spacer"></span>
+      ${photoSlot(g)}
+      ${g.status === 'final' ? `<button class="to-spray" type="button" data-ana="${g.id}">賽後統計分析 ›</button>` : `<a class="to-spray" href="index.html?t=${encodeURIComponent(U.tid)}&g=${encodeURIComponent(g.id)}">後台資訊中控 ›</a>`}
+      ${canEd() ? (g.status === 'final'
+        ? `<button class="ghost" type="button" data-act="reopen" data-g="${g.id}">重新開啟</button>`
+        : `<button class="primary" type="button" data-act="end" data-g="${g.id}">比賽結束</button>`) : ''}
+    </div>
+  </section>`;
+}
+
+/* ---------- 計分表照片（比賽結束後拍照存查） ---------- */
+function photoSlot(g) {
+  const ph = D.photos.get(g.id);
+  const btns = (cam, up) => `<span class="photo-btns"><button class="photo-btn" type="button" data-photo="${g.id}" data-src="cam">📷 ${cam}</button><button class="photo-btn" type="button" data-photo="${g.id}" data-src="file">🖼 ${up}</button></span>`;
+  if (ph) return `<span class="photo-thumb"><img src="${ph.data}" alt="計分表照片" data-view="${g.id}"><span>計分表已存查<br>${esc(ph.by || '')}</span>${canEd() ? btns('重拍', '換圖') : ''}</span>`;
+  if (!canEd() || g.status !== 'final') return '';
+  return btns('拍照存查', '上傳計分表');
+}
+function shrinkImage(file) {
+  return new Promise((ok, bad) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight, max = 1600, q = .72, out = '';
+      for (let k = 0; k < 6; k++) {
+        const s = Math.min(1, max / Math.max(w, h)), c = document.createElement('canvas');
+        c.width = Math.round(w * s); c.height = Math.round(h * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL('image/jpeg', q);
+        if (out.length < 700000) break;
+        max = Math.round(max * .8); q = Math.max(.5, q - .06);
+      }
+      URL.revokeObjectURL(url); ok(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); bad(new Error('無法讀取照片')); };
+    img.src = url;
+  });
+}
+/* 兩種來源：直接開相機拍照、或從相簿／檔案選圖片 */
+const mkInput = cam => { const i = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*' }); if (cam) i.setAttribute('capture', 'environment'); i.hidden = true; document.body.appendChild(i); i.onchange = () => onPhoto(i); return i; };
+const camInput = mkInput(true), fileInput = mkInput(false);
+let photoFor = '';
+async function onPhoto(inp) {
+  const f = inp.files[0]; inp.value = ''; if (!f || !photoFor) return;
+  try {
+    toast('照片處理中…');
+    const data = await shrinkImage(f);
+    await col(U.tid, 'photos').doc(photoFor).set({ gameId: photoFor, data, by: D.email || '', at: FB.TS() });
+    toast('計分表照片已存查');
+  } catch (e) { toast(friendlyError(e)); }
+}
+$('board').addEventListener('click', e => {
+  const p = e.target.closest('[data-photo]'); if (p && canEd()) { photoFor = p.dataset.photo; (p.dataset.src === 'cam' ? camInput : fileInput).click(); return; }
+  const v = e.target.closest('[data-view]'); if (v) {
+    const ph = D.photos.get(v.dataset.view); if (!ph) return;
+    const box = document.createElement('div'); box.className = 'photo-view';
+    box.innerHTML = `<div class="bar"><a class="ghost" href="${ph.data}" download="計分表-${esc(v.dataset.view)}.jpg" style="background:#fff;border-radius:6px;padding:6px 12px;text-decoration:none;color:#13203a">下載</a><button class="ghost" type="button" style="background:#fff">關閉</button></div><img src="${ph.data}" alt="計分表照片">`;
+    box.onclick = ev => { if (ev.target === box || ev.target.tagName === 'BUTTON') box.remove(); };
+    document.body.appendChild(box);
+  }
+});
+
+/* ---------- 寫入 ---------- */
+function save(gid, patch) {
+  if (D.email) patch.recorder = D.email;
+  col(U.tid, 'games').doc(gid).update(Object.assign(patch, { updatedAt: FB.TS() })).catch(e => toast(friendlyError(e)));
+}
+$('board').addEventListener('change', e => {
+  const el = e.target, gid = el.dataset.g, k = el.dataset.k; if (!gid || !k || !canEd()) return;
+  const g = D.games.find(x => x.id === gid); if (!g) return;
+  const v = el.value.trim() === '' ? null : Math.max(0, Math.min(99, parseInt(el.value, 10) || 0));
+  const hk = halfOrd(+el.dataset.i + 1, k), nh = nextHalf(g), old = ((g.innings || {})[k] || [])[+el.dataset.i];
+  // 依序登錄：1 上 → 1 下 → 2 上…；只能清除最後一個已登錄的半局，避免中間出現空格
+  if (v != null && hk > nh) { el.value = old ?? ''; toast(`請先登錄${halfName(nh)}的得分`); liveTotals(el.closest('.gcard')); return; }
+  if (v == null && old != null && old !== '' && hk < nh - 1) { el.value = old; toast(`只能清除最後一個半局（${halfName(nh - 1)}）；中間的局數請直接改數字`); liveTotals(el.closest('.gcard')); return; }
+  el.value = v ?? '';
+  const patch = inningPatch(g, k, +el.dataset.i, v);
+  Object.assign(g, patch);
+  save(gid, patch); liveTotals(el.closest('.gcard')); lockCells(el.closest('.gcard'), g);
+});
+/* 依目前進度開放下一個半局的格子，之後的格子先鎖住 */
+function lockCells(card, g) {
+  if (!card || !canEd() || g.status === 'final') return;
+  const nh = nextHalf(g);
+  card.querySelectorAll('table.ls input[data-i]').forEach(x => {
+    const k = halfOrd(+x.dataset.i + 1, x.dataset.k), td = x.parentElement;
+    x.disabled = k > nh; x.title = k > nh ? `請先登錄${halfName(nh)}的得分` : '';
+    td.classList.toggle('later', k > nh); td.classList.toggle('next', k === nh);
+  });
+}
+/* ---------- 局數格大按鈕：點格子跳出 −／＋ 與 0–5 快選（手機不用叫出鍵盤；電腦仍可直接打字） ---------- */
+const coarse = matchMedia('(pointer:coarse)').matches;
+let ipEl = null;
+$('ipop').querySelector('.ip-q').innerHTML = [0, 1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}">${n}</button>`).join('');
+function ipShow(el) {
+  ipEl = el; if (document.activeElement !== el) el.focus({ preventScroll: true }); document.querySelectorAll('td.ip-on').forEach(x => x.classList.remove('ip-on')); el.parentElement.classList.add('ip-on');
+  const g = D.games.find(x => x.id === el.dataset.g), side = el.dataset.k;
+  $('ip-h').textContent = `第 ${+el.dataset.i + 1} 局${side === 'away' ? '上' : '下'}・${g ? teamName(g[side + 'Id']) : ''}`;
+  ipSync();
+  const p = $('ipop'); p.hidden = false;
+  const r = el.getBoundingClientRect(), pw = p.offsetWidth, ph = p.offsetHeight;
+  let L = r.left + scrollX + r.width / 2 - pw / 2, T = r.bottom + scrollY + 6;
+  if (r.bottom + ph + 10 > innerHeight) T = r.top + scrollY - ph - 6;
+  p.style.left = Math.max(8 + scrollX, Math.min(scrollX + document.documentElement.clientWidth - pw - 8, L)) + 'px'; p.style.top = T + 'px';
+}
+function ipSync() { const v = ipEl && ipEl.value !== '' ? +ipEl.value : null; $('ip-v').textContent = v ?? '–'; $('ipop').querySelectorAll('[data-n]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.n === v)); }
+function ipSet(v) { if (!ipEl) return; ipEl.value = v ?? ''; liveTotals(ipEl.closest('.gcard')); ipSync(); }
+function ipCommit(next) {
+  if (!ipEl) return; const el = ipEl; ipEl = null; $('ipop').hidden = true; el.parentElement.classList.remove('ip-on');
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  if (next) { const c = el.closest('.gcard'), i = +el.dataset.i, k = el.dataset.k;
+    const nx = k === 'away' ? c.querySelector(`input[data-k="home"][data-i="${i}"]`) : c.querySelector(`input[data-k="away"][data-i="${i + 1}"]`);
+    if (nx && !nx.disabled) { setTimeout(() => ipShow(nx), 30); return; } }
+  el.blur();
+  setTimeout(() => { if (!ipEl && !document.activeElement?.closest?.('.gcard')) renderBoard(); }, 80);
+}
+$('ipop').addEventListener('pointerdown', e => e.preventDefault());   // 保持格子焦點
+$('ipop').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !ipEl) return;
+  const cur = ipEl.value === '' ? 0 : +ipEl.value;
+  if (b.dataset.d) ipSet(Math.max(0, Math.min(99, cur + +b.dataset.d)));
+  else if (b.dataset.n != null) { ipSet(+b.dataset.n); ipCommit(true); }
+  else if (b.dataset.clear) { ipSet(null); }
+  else if (b.dataset.ok) ipCommit(true);
+});
+$('board').addEventListener('click', e => { const el = e.target.closest('table.ls input[data-i]'); if (el && !el.disabled && canEd()) ipShow(el); });
+$('board').addEventListener('focusin', e => { const el = e.target.closest('table.ls input[data-i]'); if (el && !el.disabled && canEd() && el !== ipEl) ipShow(el); });
+document.addEventListener('pointerdown', e => { if (ipEl && !e.target.closest('#ipop') && e.target !== ipEl) ipCommit(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && ipEl) ipCommit(false); });
+$('board').addEventListener('input', e => { if (e.target === ipEl) ipSync(); });
+/* 輸入時即時更新合計（不等存檔回來，正在輸入的那格也算進去） */
+function liveTotals(card) {
+  const rows = card.querySelectorAll('table.ls tbody tr');
+  ['away', 'home'].forEach((side, k) => {
+    const ins = [...card.querySelectorAll(`input[data-k="${side}"]`)], any = ins.some(x => x.value.trim() !== '');
+    const sum = ins.reduce((t, x) => t + (parseInt(x.value, 10) || 0), 0);
+    const r = rows[k] && rows[k].querySelector('td.r'); if (r) r.textContent = any ? sum : '';
+  });
+}
+$('board').addEventListener('input', e => { if (e.target.dataset.i != null) liveTotals(e.target.closest('.gcard')); });
+// Enter 跳到下一格（客隊→主隊同一局→下一局）
+$('board').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.dataset.i) return;
+  if (ipEl) { e.preventDefault(); ipCommit(true); return; }
+  e.preventDefault(); e.target.blur();
+  const c = e.target.closest('.gcard'), i = +e.target.dataset.i, k = e.target.dataset.k;
+  const nx = k === 'away' ? c.querySelector(`input[data-k="home"][data-i="${i}"]`) : c.querySelector(`input[data-k="away"][data-i="${i + 1}"]`);
+  nx && nx.focus();
+});
+/* 進入落點紀錄：除了網址參數，也把場次寫進瀏覽器暫存（有些環境會去掉網址參數） */
+$('board').addEventListener('click', e => { const a = e.target.closest('a.to-spray'); if (!a) return; const g = a.closest('.gcard')?.dataset.id; U.cur = g; saveU(); try { localStorage.setItem('sb-nav', JSON.stringify({ t: U.tid, g, at: Date.now() })); } catch (_) {} });
+$('board').addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement?.closest?.('.gcard')) renderBoard(); }, 50));
+let pendingEnd = null;
+$('board').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b || !canEd()) return;
+  const g = D.games.find(x => x.id === b.dataset.g); if (!g) return;
+  if (b.dataset.act === 'swap') {
+    if (!canSwapSides(g)) { toast('已開始記分，無法交換先後攻'); return; }
+    save(g.id, swapPatch(g)); toast(`已交換：${teamName(g.homeId)} 先攻、${teamName(g.awayId)} 後攻`); return;
+  }
+  if (b.dataset.act === 'start') save(g.id, { status: 'live' });
+  if (b.dataset.act === 'reopen') save(g.id, { status: 'live' });
+  if (b.dataset.act === 'end') {
+    if (pendingEnd !== g.id) { pendingEnd = g.id; b.textContent = `確認結束 ${g.awayScore ?? 0}:${g.homeScore ?? 0}？`; setTimeout(() => { if (pendingEnd === g.id) { pendingEnd = null; renderBoard(); } }, 4000); return; }
+    pendingEnd = null;
+    const t = lineTotals(g);
+    save(g.id, { status: 'final', awayScore: g.awayScore ?? t.away, homeScore: g.homeScore ?? t.home });
+    toast(`已結束：${teamName(g.awayId)} ${g.awayScore ?? t.away} : ${g.homeScore ?? t.home} ${teamName(g.homeId)}`);
+  }
+});
+$('sel-t').onchange = e => { U.tid = e.target.value; U.day = ''; U.field = ''; open_(); };
+addEventListener('online', () => renderBoard()); addEventListener('offline', () => { $('sync').className = 'sync off'; $('sync-txt').textContent = '離線（暫存在裝置）'; });
+</script>
+<script>
+/* 全螢幕：電腦、Android、iPad 可用；iPhone 請用「加入主畫面」開啟 */
+(() => {
+  const b = document.getElementById('fs-btn'); if (!b) return;
+  const el = document.documentElement, can = el.requestFullscreen || el.webkitRequestFullscreen;
+  const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;
+  if (!can || standalone) { b.hidden = true; return; }
+  const on = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const sync = () => { b.textContent = on() ? '⛶ 離開全螢幕' : '⛶ 全螢幕'; setTimeout(() => dispatchEvent(new Event('resize')), 150); };
+  b.onclick = async () => { try { if (on()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document); else await can.call(el, { navigationUI: 'hide' }); } catch (e) { toast('這個瀏覽器不允許全螢幕，請用瀏覽器選單或「加入主畫面」'); } };
+  document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
+})();
+</script>
+<dialog id="ana-dlg" class="ana-dlg" aria-labelledby="ana-title">
+  <div class="ana-h"><b id="ana-title">賽後統計分析</b><span class="note" id="ana-sub"></span><span class="spacer"></span><button class="ghost" type="button" id="ana-close">關閉</button></div>
+  <iframe id="ana-frame" title="賽後統計分析"></iframe>
+</dialog>
+<script>
+/* 賽後統計分析：比賽結束後，在逐局比分紀錄內直接開啟該場的詳細數據（打者落點一覽、紀錄表、本場成績、本場 vs 歷史、統計、明細、賽事轉播稿） */
+document.getElementById('board').addEventListener('click', e => {
+  const b = e.target.closest('[data-ana]'); if (!b) return;
+  const g = D.games.find(x => x.id === b.dataset.ana); if (!g) return;
+  document.getElementById('ana-title').textContent = `賽後統計分析・第 ${g.gameNo || ''} 場`;
+  document.getElementById('ana-sub').textContent = `${teamName(g.awayId)} ${g.awayScore ?? ''} : ${g.homeScore ?? ''} ${teamName(g.homeId)}`;
+  document.getElementById('ana-frame').src = ANA_PAGE + '?t=' + encodeURIComponent(U.tid) + '&g=' + encodeURIComponent(g.id) + '&embed=1#detail';
+  document.getElementById('ana-dlg').showModal();
+});
+document.getElementById('ana-close').onclick = () => { document.getElementById('ana-dlg').close(); document.getElementById('ana-frame').src = 'about:blank'; };
+</script>
+</body>
+</html>

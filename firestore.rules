@@ -1,0 +1,89 @@
+rules_version = '2';
+
+// 慢壘賽事紀錄系統 — Firestore 安全規則
+// 角色存在 users/{uid}.role：admin（賽務管理）、scorer（紀錄員）、pending（待審核）
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return /databases/$(db)/documents/users/$(request.auth.uid); }
+    function role() { return exists(userDoc()) ? get(userDoc()).data.role : 'none'; }
+    function isAdmin() { return signedIn() && role() == 'admin'; }
+    function isScorer() { return signedIn() && role() in ['admin', 'scorer']; }
+
+    // 使用者：登入後可自行建立待審核資料；角色只能由管理員變更
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+                    && request.resource.data.role == 'pending'
+                    && request.resource.data.keys().hasOnly(['email', 'name', 'role', 'createdAt']);
+      // 本人只能修改自己的姓名；角色等其他欄位僅管理員可改
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+      allow delete: if isAdmin();
+    }
+
+    match /tournaments/{tid} {
+      // 賽事、球隊、名單、賽程比分：公開可讀（可做公開戰績頁），僅管理員可改
+      allow read: if true;
+      allow write: if isAdmin();
+      // 封存的賽事：底下所有資料都不能新增、修改或刪除（管理員要先在賽事上解除封存）
+      function notArchived() { return get(/databases/$(db)/documents/tournaments/$(tid)).data.get('archived', false) != true; }
+
+      match /teams/{id}   { allow read: if true; allow write: if isAdmin() && notArchived(); }
+      // 球員名單：管理員可改；紀錄員可在落點紀錄表新增球員（只能新增，不能改刪）
+      match /players/{id} {
+        allow read: if true;
+        allow write: if isAdmin() && notArchived();
+        allow create: if notArchived() && isScorer() && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.keys().hasOnly(['teamId', 'no', 'name', 'sex', 'bats', 'createdBy', 'createdAt'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0;
+      }
+
+      match /games/{id} {
+        allow read: if true;
+        allow create, delete: if isAdmin() && notArchived();
+        // 紀錄員可在場邊更新比分、局數與比賽狀態
+        allow update: if notArchived() && (isAdmin() || (isScorer()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['homeScore', 'awayScore', 'innings', 'inning', 'umpire', 'lineups', 'outsAdj', 'status', 'updatedAt', 'awayId', 'homeId', 'recorder', 'live', 'endReason'])
+          && request.resource.data.status in ['scheduled', 'live', 'final']
+          // 先後攻現場決定：只能把兩隊互換，不能換成別隊
+          && ((request.resource.data.awayId == resource.data.awayId && request.resource.data.homeId == resource.data.homeId)
+              || (request.resource.data.awayId == resource.data.homeId && request.resource.data.homeId == resource.data.awayId))));
+      }
+
+      // 計分表照片：比賽結束後由紀錄員拍照存查（壓縮後存成文字，單張 < 1MB）
+      match /photos/{id} {
+        allow read: if true;
+        allow write: if notArchived() && isScorer() && (request.resource == null || request.resource.data.data.size() < 1000000);
+      }
+
+      // 落點紀錄表（紙本電子化）上傳：紀錄員上傳，管理員確認後匯入成打席
+      match /uploads/{id} {
+        allow create: if notArchived() && isScorer()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && request.resource.data.payload is string && request.resource.data.payload.size() < 900000;
+        allow read: if isAdmin() || (isScorer() && resource.data.createdBy == request.auth.uid);
+        allow update, delete: if isAdmin() && notArchived();
+      }
+
+      // 擊球落點：屬於球探資料，只有紀錄員與管理員可讀寫
+      match /balls/{id} {
+        allow read: if isScorer();
+        // 比賽已結束（final）就鎖定，不能再新增、修改或刪除落點
+        function gameOpen(gid) { return get(/databases/$(db)/documents/tournaments/$(tid)/games/$(gid)).data.status != 'final'; }
+        // 管理員從紀錄表匯入時，比賽已結束也可以寫入（更正用）
+        allow create: if notArchived() && (isAdmin() || (isScorer() && gameOpen(request.resource.data.gameId)))
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.result in ['1B', '2B', '3B', 'HR', 'OUT', 'E', 'FC', 'DP', 'SF', 'GS', 'K', 'BB']
+          && request.resource.data.type in ['G', 'L', 'F', 'P']
+          && request.resource.data.x is number && request.resource.data.y is number
+          && request.resource.data.gameId is string
+          && request.resource.data.batterId is string;
+        allow update, delete: if notArchived() && (isAdmin() || (isScorer() && gameOpen(resource.data.gameId)));
+      }
+    }
+  }
+}

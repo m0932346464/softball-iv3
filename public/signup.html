@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#0e1d3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="慢壘紀錄">
+<title>紀錄員註冊頁</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<link rel="stylesheet" href="common.css">
+<style>
+/* 版面：頁首 → 置中卡片（註冊表單／註冊完成／已登入狀態三選一）→ 開通流程說明 */
+.wrap{max-width:440px;margin:0 auto;padding:28px 16px 48px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.card h2{margin:0;font-size:20px}
+.card p{margin:0}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--ink)}
+.fld input{width:100%;padding:11px 12px;font-size:16px;font-weight:400}
+.fld small{font-weight:400;color:var(--muted)}
+.card .primary{padding:12px;font-size:15px}
+.err{color:var(--r1);font-size:13px;min-height:1.2em;margin:0}
+.steps{margin:0;padding-left:20px;color:var(--muted);font-size:13px;line-height:1.8}
+.steps b{color:var(--ink)}
+.ok{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--r3) 18%,transparent);color:var(--r3);font:700 26px var(--display)}
+.links{display:flex;gap:8px;flex-wrap:wrap}
+.links a{flex:1 1 0;min-width:120px;text-align:center;text-decoration:none;border:1px solid var(--rule);border-radius:8px;padding:10px;font-weight:700;color:var(--ink);background:var(--surface)}
+.links a.main{background:var(--navy);color:var(--navy-ink);border-color:var(--navy)}
+.role{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
+.role.pending{background:color-mix(in srgb,var(--r2) 22%,transparent);color:#9a5b00}
+.role.ok2{background:color-mix(in srgb,var(--r3) 18%,transparent);color:var(--r3)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+</head>
+<body>
+<header class="mast">
+  <div class="in mast-top">
+    <h1>紀錄員註冊頁</h1>
+    <div class="who">
+      <a href="score.html" style="color:var(--mast-ink)">逐局比分紀錄</a>
+      <a href="standings.html" style="color:var(--mast-ink)">預賽排名看板</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="setup" class="readonly-note" hidden>尚未連接資料庫：請在 config.js 貼上 Firebase 專案設定。</div>
+
+  <form class="card" id="form" hidden novalidate>
+    <h2>建立紀錄員帳號</h2>
+    <p class="note">註冊後由管理員開通，就能使用打擊落點紀錄上傳資料、回報逐局比分紀錄。</p>
+    <label class="fld">姓名<input id="su-name" autocomplete="name" required><small>會顯示在逐局比分紀錄的「記錄員」欄</small></label>
+    <label class="fld">Email<input id="su-email" type="email" autocomplete="username" required></label>
+    <label class="fld">密碼<input id="su-pass" type="password" autocomplete="new-password" minlength="6" required><small>至少 6 個字元</small></label>
+    <label class="fld">再輸入一次密碼<input id="su-pass2" type="password" autocomplete="new-password" required></label>
+    <button class="primary" type="submit" id="su-btn">註冊</button>
+    <p class="err" id="su-err" role="alert"></p>
+    <p class="note" style="text-align:center">已經有帳號？<a href="score.html">回逐局比分紀錄登入</a></p>
+  </form>
+
+  <div class="card" id="done" hidden>
+    <div class="ok">✓</div>
+    <h2 id="done-title">註冊完成</h2>
+    <p><b id="done-name"></b>（<span id="done-email"></span>）<span class="role" id="done-role"></span></p>
+    <p class="note" id="done-note"></p>
+    <div class="links">
+      <a class="main" href="sheet.html">打擊落點紀錄</a>
+      <a href="score.html">逐局比分紀錄</a>
+    </div>
+    <button class="ghost" type="button" id="another">登出，改註冊其他帳號</button>
+  </div>
+
+  <div class="card" style="gap:6px">
+    <h2 style="font-size:15px">開通流程</h2>
+    <ol class="steps">
+      <li>在這頁填<b>姓名、Email、密碼</b>完成註冊。</li>
+      <li>通知管理員到「管理後台 → 帳號」把你設為<b>紀錄員</b>。</li>
+      <li>回打擊落點紀錄或逐局比分紀錄，重新整理即可開始紀錄。</li>
+    </ol>
+  </div>
+</div>
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<script>
+'use strict';
+let busy = false;
+const ROLE = { admin: ['管理員', 'ok2'], scorer: ['紀錄員', 'ok2'], pending: ['待開通', 'pending'] };
+function showForm() { $('form').hidden = false; $('done').hidden = true; setTimeout(() => $('su-name').focus(), 0); }
+function showDone(fresh, nm, em) {
+  const r = ROLE[FB.me.role] || ROLE.pending;
+  $('form').hidden = true; $('done').hidden = false;
+  $('done-title').textContent = fresh ? '註冊完成' : '你已經登入';
+  $('done-name').textContent = nm || FB.me.name || '（未填姓名）';
+  $('done-email').textContent = em || FB.me.email || '';
+  $('done-role').textContent = r[0]; $('done-role').className = 'role ' + r[1];
+  $('done-note').textContent = FB.me.role === 'pending'
+    ? '帳號待開通：請通知管理員在後台「帳號」把你設為紀錄員，開通後重新整理紀錄頁面即可使用。'
+    : '帳號已開通，可以直接開始紀錄。';
+}
+if (!FB.ready) $('setup').hidden = false;
+else FB.auth.onAuthStateChanged(async user => {
+  if (!user) return showForm();
+  if (busy) return;               // 註冊流程自己處理
+  try { await ensureUser(user); showDone(false); } catch (e) { toast(friendlyError(e)); showForm(); }
+});
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault(); $('su-err').textContent = '';
+  const nm = $('su-name').value.trim(), em = $('su-email').value.trim(), pw = $('su-pass').value, pw2 = $('su-pass2').value;
+  const fail = (m, id) => { $('su-err').textContent = m; if (id) $(id).focus(); };
+  if (!nm) return fail('請填寫姓名', 'su-name');
+  if (!/^\S+@\S+\.\S+$/.test(em)) return fail('請填寫正確的 Email', 'su-email');
+  if (pw.length < 6) return fail('密碼至少 6 個字元', 'su-pass');
+  if (pw !== pw2) return fail('兩次輸入的密碼不一樣', 'su-pass2');
+  busy = true; $('su-btn').disabled = true; $('su-btn').textContent = '註冊中…';
+  try {
+    try { sessionStorage.setItem('sb-signup-name', nm); } catch (_) {}
+    const cred = await FB.auth.createUserWithEmailAndPassword(em, pw);
+    const user = (cred && cred.user) || FB.auth.currentUser;
+    try { user.updateProfile && await user.updateProfile({ displayName: nm }); } catch (_) {}
+    await ensureUser(user);
+    if (!FB.me.name) { await saveMyName(nm); }
+    showDone(true, nm, em);
+  } catch (err) { fail(friendlyError(err)); }
+  finally { busy = false; $('su-btn').disabled = false; $('su-btn').textContent = '註冊'; }
+});
+$('another').onclick = async () => { try { await FB.auth.signOut(); } catch (_) {} showForm(); };
+</script>
+</body>
+</html>

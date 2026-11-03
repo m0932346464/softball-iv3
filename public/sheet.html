@@ -1,0 +1,1421 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#13203a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>打擊落點紀錄</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+/* Layout: 紙本「落點紀錄表 第三版」的電子版（第四版：替補改為需要時才在該棒下方新增一行）。上：表頭（隊伍、球場、天氣、風勢、日期、時間）；
+   左：手繪格位球場（點格子＝落點）＋ 結果代碼鍵盤（依紙本圖例分色）；右：紀錄表格（棒次×打席，落點/結果/得分/打點）。
+   平板橫放一頁完成；手機上下排列。 */
+:root{
+  --paper:#f4f2ec; --surface:#ffffff; --ink:#1d2433; --muted:#667085; --rule:#c9ccd3; --line:#2b2f36;
+  --loc:#f4b183; --loc-soft:#fbe3d1; --res:#8eaadb; --res-soft:#dde7f6;
+  --hit:#cfe6bf; --out:#f8cbad; --etc:#ffe599; --cur:#2f5bd3; --dirt:#d9d9d9; --grass:#ffffff;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif; --body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--paper:#11151d;--surface:#1a202b;--ink:#e8ebf1;--muted:#9aa3b5;--rule:#394152;--line:#c9cfdb;--loc:#a8653a;--loc-soft:#3a2a1f;--res:#4a6aa8;--res-soft:#1f2b40;--hit:#2f4a27;--out:#4d3527;--etc:#4d4420;--cur:#8aa6ff;--dirt:#2e3542;--grass:#1a202b;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#11151d;--surface:#1a202b;--ink:#e8ebf1;--muted:#9aa3b5;--rule:#394152;--line:#c9cfdb;--loc:#a8653a;--loc-soft:#3a2a1f;--res:#4a6aa8;--res-soft:#1f2b40;--hit:#2f4a27;--out:#4d3527;--etc:#4d4420;--cur:#8aa6ff;--dirt:#2e3542;--grass:#1a202b;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font:14px/1.5 var(--body);margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--cur);outline-offset:1px}
+.app{min-height:100%;display:flex;flex-direction:column;padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px));padding-block:8px 10px;gap:8px}
+/* top bar */
+.bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bar h1{margin:0;font-size:17px;font-weight:900;white-space:nowrap}
+.bar h1 small{font:600 12px var(--display);letter-spacing:.08em;color:var(--muted);margin-left:6px}
+.sp{flex:1}
+.btn{border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:5px 10px;font-size:13px;white-space:nowrap}
+.btn.pri{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+select.btn{padding-right:6px;max-width:260px}
+.head{display:grid;grid-template-columns:minmax(0,2.8fr) minmax(0,1.1fr) minmax(0,.8fr) minmax(0,.9fr) minmax(175px,1.1fr) minmax(195px,.9fr);gap:6px;background:var(--surface);border:2px solid var(--line);border-radius:6px;padding:6px 8px}
+.head label{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:700;min-width:0}
+.head input{flex:1;min-width:0;border:0;border-bottom:1px solid var(--rule);background:transparent;padding:2px 4px;font-weight:500}
+/* main */
+.main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:10px}   /* 左側球場放大（主要點選區），右側表格只是呈現結果 */
+.left{display:flex;flex-direction:column;gap:8px;min-height:0}
+.fieldbox{background:var(--surface);border:1px solid var(--rule);border-radius:8px;position:relative;flex:1;min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px}
+.fieldbox svg{width:100%;flex:1;min-height:0;height:auto;display:block;touch-action:manipulation}
+.cell-z{cursor:pointer}
+.cell-z:hover path{fill:color-mix(in srgb,var(--cur) 12%,transparent)}
+.zlab{font:600 15px var(--display);fill:var(--ink);pointer-events:none}
+.zlab.s{font-size:12.5px}
+.flab{font:600 12px var(--display);fill:var(--muted);pointer-events:none}
+.mlab{font:600 11px var(--display);fill:var(--muted);pointer-events:none}
+.hint{position:absolute;left:10px;top:8px;font-size:12px;color:var(--muted);background:color-mix(in srgb,var(--surface) 85%,transparent);padding:2px 6px;border-radius:6px}
+.hint b{color:var(--cur)}
+/* code pad */
+.pad{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:6px}
+.pad .grp{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);font-weight:700;margin-top:2px}
+.pad .grp::after{content:"";flex:1;border-top:1px dashed var(--rule)}
+.code{border:1px solid var(--rule);border-radius:7px;padding:4px 2px;display:flex;flex-direction:column;align-items:center;line-height:1.15;min-height:42px;justify-content:center}
+.code b{font:700 17px var(--display);letter-spacing:.02em}
+.code span{font-size:10.5px;color:var(--muted)}
+.code.hit{background:var(--hit)}.code.out{background:var(--out)}.code.etc{background:var(--etc)}
+.code:active{transform:scale(.97)}
+.rowtools{grid-column:1/-1;display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px}
+.rowtools .ctr{display:flex;align-items:center;gap:3px;border:1px solid var(--rule);border-radius:7px;padding:2px 4px;background:var(--etc)}
+.app.stat .rowtools .ctr{box-shadow:0 0 0 3px var(--cur)}
+.rowtools .ctr b{min-width:16px;text-align:center;font:700 16px var(--display)}
+.rowtools .ctr button{border:0;background:var(--surface);border-radius:5px;width:26px;height:26px;font-weight:700}
+/* table */
+.right{min-height:0;display:flex;flex-direction:column;gap:6px}
+.tblwrap{flex:1;min-height:0;overflow:auto;background:var(--surface);border:2px solid var(--line);border-radius:4px}
+table.sheet{border-collapse:collapse;width:100%;min-width:540px;font-variant-numeric:tabular-nums;table-layout:fixed}
+.sheet th,.sheet td{border:1px solid var(--rule);text-align:center;padding:0;height:31px;font-size:13px}
+.sheet thead th{position:sticky;top:0;z-index:2;background:var(--surface);font-weight:700;font-size:12px}
+.sheet thead tr:first-child th{top:0;height:24px}
+.sheet thead tr:nth-child(2) th{top:24px}
+.sheet th.g-loc{background:var(--loc)}.sheet th.g-res{background:var(--res)}
+.sheet td.ord{font-weight:700;width:40px}
+.sheet td.no input{width:100%;height:100%;border:0;background:transparent;text-align:center;font-weight:700}
+.sheet tr:nth-child(even) td{background:color-mix(in srgb,var(--dirt) 35%,transparent)}
+.sheet td.c{cursor:pointer;font:700 17px var(--display);letter-spacing:.02em;position:relative}
+.sheet td.c.loc{color:#8a4b1f}
+:root[data-theme="dark"] .sheet td.c.loc{color:#f0b27f}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .sheet td.c.loc{color:#f0b27f}}
+.sheet td.c.res{color:var(--ink)}
+.sheet td.c.on{box-shadow:inset 0 0 0 3px var(--cur);background:color-mix(in srgb,var(--cur) 12%,transparent)!important}
+.sheet td.c.pair{background:color-mix(in srgb,var(--cur) 6%,transparent)!important}
+.sheet td.note input{width:100%;height:100%;border:0;background:transparent;font-size:11px;padding:0 3px}
+.sheet td.num{font:700 15px var(--display);cursor:pointer}
+.sheet td.num.on{box-shadow:inset 0 0 0 3px var(--cur)}
+.sheet td.c.res sup{font:700 11px var(--display);color:#b45309;margin-left:1px}
+.sheet td.c.res .prm{display:inline-block;vertical-align:middle;margin-left:2px;font:700 9px/1.2 var(--body);color:#fff;background:#7c3aed;border-radius:3px;padding:1px 2px}
+.sheet td.c.res i.run{font-style:normal;color:#c2410c;font-size:11px;margin-left:2px}
+.statp{position:relative;flex:none;width:100%;margin-top:4px;background:var(--surface);border:2px solid var(--cur);border-radius:12px;padding:8px 10px;box-shadow:0 6px 20px rgba(0,0,0,.18);display:none;font-size:13px}
+.statp.on{display:block}
+.statp .t{font-weight:900;font-size:14px;margin-bottom:4px;display:flex;gap:8px;align-items:center}
+.statp .t small{font-weight:500;color:var(--muted)}
+.statp .rw{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0}
+.statp .rw>b{min-width:62px}
+.chip{border:1px solid var(--rule);background:var(--paper);border-radius:999px;padding:5px 11px;font-size:14px;font-weight:700}
+.chip small{font-weight:500;color:var(--muted);margin-left:3px}
+.chip.sel{background:#c2410c;border-color:#c2410c;color:#fff}.chip.sel small{color:#fde7d9}
+.stepper{display:flex;align-items:center;gap:4px;border:1px solid var(--rule);border-radius:8px;padding:2px;background:var(--etc)}
+.stepper button{border:0;background:var(--surface);border-radius:6px;width:32px;height:30px;font-weight:900;font-size:16px}
+.stepper b{min-width:22px;text-align:center;font:700 19px var(--display)}
+.app.stat .sheet td.num.r.can{background:color-mix(in srgb,var(--etc) 70%,transparent)!important;outline:1px dashed var(--cur);outline-offset:-4px}
+.sheet tfoot td{border-top:2px solid var(--line);height:30px;background:var(--surface)}
+.sheet td.tot{font:700 17px var(--display);background:var(--etc)!important}
+.sheet tr.sub td.ord{color:var(--muted)}
+.sheet tr.cur td.ord{background:var(--cur)!important;color:#fff}
+.sheet tr.dup td.no,.sheet tr.dup td.nm{background:#fee2e2!important;color:#991b1b}
+.sheet .sep td{border-top:2px solid var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--muted)}
+.legend span b{font-family:var(--display);color:var(--ink);margin-left:2px}
+.toast{zoom:var(--k,1);position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:7px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;max-width:calc(100% - 32px)}
+.toast.on{opacity:1}
+.toast.mid{top:50%;bottom:auto;transform:translate(-50%,-50%);background:#b42318;color:#fff;font-size:20px;font-weight:700;padding:18px 28px;border-radius:14px;max-width:560px;text-align:center;line-height:1.5;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+dialog{border:1px solid var(--rule);border-radius:14px;background:var(--surface);color:var(--ink);padding:22px 24px;width:560px;max-width:calc(100vw / var(--k,1) - 32px);font-size:16px;zoom:var(--k,1)}
+dialog .btn{font-size:16px;padding:10px 20px;border-radius:10px}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h2{margin:0 0 10px;font-size:22px}
+.list{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto;margin:8px 0}
+.list button{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;border:1px solid var(--rule);background:var(--surface);border-radius:10px;padding:14px 16px;font-size:17px;font-weight:700}
+.list button:hover{border-color:var(--cur)}
+.list button.now{border:2px solid var(--cur);background:color-mix(in srgb,var(--cur) 10%,var(--surface))}
+.list button small{color:var(--muted)}
+.tbadge{flex:none;font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;white-space:nowrap;background:var(--paper);color:var(--muted)}
+.tbadge.ok{background:#dcfce7;color:#166534}.tbadge.no{background:#fee2e2;color:#991b1b}
+.sheet td.nm{font-size:13px;cursor:pointer;text-align:center;padding:0 2px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet td.nm.add{color:var(--cur);font-weight:700}.sheet td.nm.multi{color:#b45309;font-weight:700}
+.plist{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
+.plist button{border:1px solid var(--rule);background:var(--surface);border-radius:10px;padding:10px 12px;text-align:left;font-size:17px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.plist button small{font-weight:500;color:var(--muted);font-size:13px}.plist button.sel{border:2px solid var(--cur);background:color-mix(in srgb,var(--cur) 10%,var(--surface))}
+.padd{display:flex;gap:8px;align-items:center;border-top:1px dashed var(--rule);padding-top:10px;margin-top:4px;flex-wrap:wrap}
+.padd input{flex:1;min-width:120px;font:inherit;font-size:17px;padding:7px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink)}
+.padd .sx button{border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:700}.padd .sx button.sel{background:var(--ink);color:var(--paper)}
+.gamebar{display:flex;align-items:stretch;gap:6px}
+.gamebar button{flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;border:2px solid var(--rule);background:var(--surface);border-radius:10px;padding:4px 12px;font-weight:700;font-size:15px;min-width:0}
+.gamebar button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gamebar button small{color:var(--muted);font-weight:600;margin-right:4px}
+.gamebar button b{font:700 24px var(--display)}
+.gamebar button.on{border-color:var(--cur);background:color-mix(in srgb,var(--cur) 10%,var(--surface))}
+.gamebar .half{display:flex;align-items:center;font-weight:900;color:var(--cur);white-space:nowrap;padding:0 4px}
+.ngwho{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 4px}.ngwho button{font:inherit;font-size:17px;font-weight:700;padding:14px 10px;border:2px solid var(--rule);border-radius:10px;background:var(--surface);color:var(--ink);cursor:pointer;line-height:1.35}.ngwho button small{display:block;font-size:13px;font-weight:500;color:var(--muted)}.ngwho button.on{border-color:var(--accent,#2f5bd3);background:color-mix(in srgb,var(--accent,#2f5bd3) 12%,var(--surface));}.ngwho button.on small{color:var(--accent,#2f5bd3);font-weight:700}.ngq{font-weight:700;margin-top:6px}.ngq small{font-weight:500;color:var(--muted);margin-left:8px;font-size:13px}
+.qlinks{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--etc)}.qlinks a{font-weight:700;color:var(--cur,#1d4ed8);text-decoration:none;border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:5px 10px}
+.hint .pq{margin-left:6px;font-weight:700;color:var(--cur,#1d4ed8);text-decoration:none;border:1px solid var(--rule);border-radius:7px;padding:1px 8px;background:var(--surface);white-space:nowrap}
+.ngbox label{display:flex;align-items:center;gap:10px;margin:8px 0;font-weight:700;white-space:nowrap}
+.ngbox label>input,.ngbox label>select{flex:1 1 0;min-width:0;font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink)}
+.innctl{display:flex;align-items:center;gap:4px;border:2px solid var(--line);border-radius:9px;padding:2px 4px 2px 10px;font-weight:700;background:var(--surface)}
+.innctl .outs{display:flex;gap:3px;align-items:center;margin:0 3px 0 4px;font-size:12px;color:var(--muted)}
+.innctl .outs i{width:15px;height:15px;border-radius:50%;border:2px solid #b42318;cursor:pointer;display:inline-block}
+.innctl .outs i.on{background:#b42318}
+.innctl .ih{margin-left:3px;font-size:13px;font-weight:900;padding:0 4px;border-radius:6px;line-height:1.3}.innctl .ih.top{color:#1d4ed8;background:#dbe6ff}.innctl .ih.bot{color:#b45309;background:#fde9cf}
+.innctl b{font:700 20px var(--display);min-width:18px;text-align:center;color:var(--cur)}
+.innctl button{border:0;border-radius:6px;padding:4px 9px;font-weight:700;background:var(--paper)}
+.innctl #inn-up{background:var(--ink);color:var(--paper)}
+.sheet td.c.loc sub.inn{position:absolute;left:1px;top:1px;font:700 11px/1 var(--display);color:#fff;background:var(--muted);border-radius:3px;padding:1px 2px;opacity:.75}
+.sheet td.c.loc.long{font-size:14px;letter-spacing:0;padding-top:9px!important}
+.upbox label{display:flex;align-items:center;gap:10px;margin:8px 0;font-weight:700;white-space:nowrap}
+.upbox label>input,.upbox label>select{flex:1 1 0;min-width:0;width:100%;font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink)}
+.upbox .msg{font-size:14px;color:var(--muted);min-height:20px}
+.upbox .err{color:#b42318;font-weight:700}
+.upbox table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}.upbox td,.upbox th{border:1px solid var(--rule);padding:3px 6px;text-align:left}
+#linkbtn.ok{border-color:#15803d;color:#15803d;font-weight:700}#linkbtn.wait{border-color:#b45309;color:#b45309;font-weight:700}
+#upbtn.done{background:#15803d;border-color:#15803d}
+.slots{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.slots button{border:1px solid var(--rule);background:var(--surface);border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.slots button b{font:700 20px var(--display)}.slots button small{font-size:13px;color:var(--muted);text-align:center;padding:2px 4px}
+.slots button.sel{border:2px solid var(--cur);background:color-mix(in srgb,var(--cur) 12%,var(--surface))}
+.sheet td.ord .tsub{display:inline-block;margin-left:2px;font-size:10px;background:var(--cur);color:#fff;border-radius:4px;padding:0 3px;vertical-align:2px}
+.sheet tr.sub td{background:color-mix(in srgb,var(--cur) 5%,var(--surface))!important}
+.sheet tr.sub td.ord{color:var(--cur)}
+.sheet tr.cur td.ord .tsub{background:#fff;color:var(--cur)}
+.sheet tr.gone td.ord,.sheet tr.gone td.no input{color:var(--muted);text-decoration:line-through}
+.list .row{display:flex;gap:8px}.list .row>[data-pick]{flex:1;min-width:0}
+.list button.del{flex:none;justify-content:center;color:#b42318;font-size:15px;padding:0 16px;min-width:76px}
+.list button.del.arm{background:#b42318;color:#fff;border-color:#b42318}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+/* 一頁式（平板、電腦橫放） */
+/* 固定平板橫放版面 1340×800，依螢幕等比縮放 */
+html,body{overflow:hidden}
+.app{position:absolute;left:0;top:0;width:1340px;height:800px;min-height:0;transform-origin:0 0}
+/* print: like the paper */
+@media print{
+  @page{size:A4 portrait;margin:10mm}
+  body{background:#fff;height:auto;overflow:visible}
+  .bar,.pad,.hint,.legend,.toast{display:none!important}
+  html,body{overflow:visible}
+  .app{position:static;width:auto;height:auto;padding:0;transform:none!important}
+  .main{display:block}
+  .fieldbox{border:0;height:auto;min-height:0}
+  .fieldbox svg{height:auto;max-height:none}
+  .tblwrap{overflow:visible;border-width:1.5px}
+  table.sheet{min-width:0}
+  .sheet td.c.on,.sheet td.c.pair{box-shadow:none;background:transparent!important}
+  .sheet td.num.on{box-shadow:none}
+  .sheet tr.cur td.ord{background:transparent!important;color:inherit}
+  .cell-z path{fill:transparent!important}
+  #mark{display:none}
+}
+.sheet td.c{font-size:clamp(12px,1.15vw,17px);letter-spacing:0}
+.sheet td.c.note,.sheet td.rem{font-size:11px}
+.sheet td.c.loc{overflow:hidden;white-space:nowrap;padding-top:7px}
+.sheet td.c.loc.long{font-size:clamp(10px,.85vw,14px)}
+.sheet td.c.loc sub.inn{font-size:9px;padding:0 2px}
+/* 球場：提示列在上方、不壓到球場；格位字放大、線條加粗 */
+.fieldbox{justify-content:flex-start;padding:4px 6px 6px}
+.hint{position:static;align-self:stretch;flex:none;font-size:13px;padding:2px 4px;background:none}
+.fieldbox svg{flex:1 1 0;min-height:0;height:100%;width:100%}
+.zlab{font-size:21px;font-weight:700}
+.zlab.s{font-size:17px}
+.flab{font-size:15px;font-weight:700}
+.mlab{font-size:13px}
+.cell-z path{stroke-width:1.5px!important}
+.pq{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-weight:700;font-size:14px;color:var(--cur,#1d4ed8);text-decoration:none;border:1px solid var(--rule);border-radius:10px;padding:6px 12px;background:var(--surface);box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.pq small{font-weight:500;font-size:11.5px;color:var(--muted)}
+.pq[hidden]{display:none}
+/* 下方結果面板壓縮：組名放左邊、按鈕變矮，讓出空間給球場 */
+.pad{grid-template-columns:42px repeat(7,minmax(0,1fr));gap:4px;padding:5px}
+.pad .grp{grid-column:auto;margin:0;font-size:11px;line-height:1.2;justify-content:center;text-align:center;writing-mode:horizontal-tb}
+.pad .grp::after{display:none}
+.code{min-height:34px;padding:2px;line-height:1.05}
+.code b{font-size:16px}.code span{font-size:10px}
+.rowtools{grid-column:2/-1}
+.rowtools .code{min-height:34px}
+/* 查此打者視窗 */
+.pq-wrap{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(220px,1fr);gap:14px;margin-top:10px;align-items:start}
+@media (max-width:700px){.pq-wrap{grid-template-columns:minmax(0,1fr)}}
+#pq-field{width:100%;height:auto;display:block}
+#pq-field .zlab{font-size:19px}#pq-field .zlab.s{font-size:15px}
+.pq-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.pq-stat{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.pq-stat div{border:1px solid var(--rule);border-radius:8px;padding:4px 6px;display:flex;flex-direction:column}
+.pq-stat span{font-size:11px;color:var(--muted)}.pq-stat b{font:700 18px var(--display)}
+.pq-lg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--muted)}
+.pq-lg i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.pq-lg i.h{background:#94a3b8;opacity:.45}.pq-lg i.g{background:#334155}
+.pq-list{display:flex;flex-wrap:wrap;gap:4px;max-height:300px;overflow:auto}
+.pq-list .lbl{width:100%;font-size:12px;font-weight:700;color:var(--muted);margin-top:4px}
+.pq-list span{font-size:12.5px;border:1px solid var(--rule);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.pq-list span.cur{border-color:var(--ink);font-weight:700}
+.pq-list span.none{border:0;color:var(--muted)}
+.pq-list span i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+/* 非進攻方的紀錄表：只能查看 */
+.app.waiting .fieldbox svg,.app.waiting .pad{opacity:.35;filter:grayscale(1)}
+.app.waiting .hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fef3c7;color:#78350f;border:1px solid #f59e0b;border-radius:8px;padding:6px 10px;font-size:14px}
+.app.waiting .hint b{color:#78350f}
+.waitmsg{flex:1 1 300px}
+/* 比賽計時、比賽結束 */
+.btn.clock{font-variant-numeric:tabular-nums;font-weight:700}
+.btn.clock.warn{background:#fef3c7;border-color:#f59e0b;color:#92400e}
+.btn.clock.over{background:#fee2e2;border-color:#dc2626;color:#b91c1c}
+.btn.ended{background:#e5e7eb;color:#374151;font-weight:700}
+.app.ended .fieldbox svg,.app.ended .pad{opacity:.35;filter:grayscale(1)}
+.app.ended .hint{background:#e5e7eb;border:1px solid #9ca3af;border-radius:8px;padding:6px 10px;font-size:14px;color:#111827}
+table.endline{border-collapse:collapse;font-size:15px;min-width:100%}
+table.endline th,table.endline td{border:1px solid var(--rule);padding:4px 8px;text-align:center}
+table.endline tbody th{text-align:left;white-space:nowrap}
+table.endline td.tot{font-weight:900;font-size:17px}
+.end-reasons{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:15px;margin-top:4px}
+.end-reasons label{display:flex;align-items:center;gap:4px}
+.ckrow{display:flex;align-items:center;gap:10px;margin:6px 0;font-weight:700}
+.ckrow select,.ckrow input{flex:1;font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink)}
+.more{position:relative}.more>summary{list-style:none;cursor:pointer}.more>summary::-webkit-details-marker{display:none}
+.more .menu{position:absolute;right:0;top:calc(100% + 4px);z-index:30;display:flex;flex-direction:column;gap:4px;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.15);min-width:120px}
+.more .menu .btn{text-align:left}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+<div class="app">
+  <div class="bar">
+    <h1>打擊落點紀錄</h1>
+    <button type="button" class="btn" id="sheets" aria-label="切換紀錄表" style="min-width:150px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left"></button>
+    <button class="btn" id="new">＋ 新紀錄表</button>
+    <span class="innctl" title="三人出局自動換局；也可以手動按「換局」">第 <b id="inn-n">1</b> 局<span id="inn-h" class="ih" hidden></span><span class="outs" id="outs" title="點圓點可修正出局數"></span><button type="button" id="inn-dn" aria-label="上一局">−</button><button type="button" id="inn-up">換局 ▶</button></span>
+    <button class="btn" id="clockbtn">⏱ 開賽計時</button>
+    <button class="btn" id="endbtn" title="時間到、打完 7 局或提前結束時，由紀錄員確認比賽結束">🏁 比賽結束</button>
+    <span class="sp"></span>
+    <button class="btn" id="undo" title="復原上一個動作">↶ 復原</button>
+    <button class="btn" id="linkbtn" title="連結本場比賽：每局結束自動回報比分到逐局比分紀錄">🔗 連結本場</button>
+    <button class="btn pri" id="upbtn" title="上傳到管理後台">☁ 上傳</button>
+    <details class="more"><summary class="btn" title="匯出 CSV、備份、還原、列印">⋯ 更多</summary><div class="menu">
+    <button class="btn" id="exp-csv" title="匯出 CSV">匯出 CSV</button>
+    <button class="btn" id="exp-json" title="把紀錄表存成檔案備份">備份</button>
+    <button class="btn" id="imp" title="讀回備份檔">還原</button>
+    <button class="btn" id="print">列印</button></div></details>
+    <button class="btn" id="fs">⛶</button>
+    <input type="file" id="imp-file" accept=".json,application/json" hidden>
+  </div>
+
+  <div class="head" id="head">
+    <label>隊伍：<input id="h-team" list="dl-team" autocomplete="off" placeholder="輸入校名或隊名，從名單選"><span id="team-badge" class="tbadge"></span></label>
+    <label>球場：<input id="h-field" autocomplete="off"></label>
+    <label>天氣：<input id="h-weather" list="dl-weather" autocomplete="off"></label>
+    <label>風勢：<input id="h-wind" list="dl-wind" autocomplete="off"></label>
+    <label>日期：<input id="h-date" type="date"></label>
+    <label>時間：<input id="h-time" type="time"></label>
+    <datalist id="dl-team"></datalist><datalist id="dl-weather"><option value="晴"><option value="多雲"><option value="陰"><option value="小雨"><option value="雨"></datalist>
+    <datalist id="dl-wind"><option value="無風"><option value="微風"><option value="順風（往外野）"><option value="逆風（往本壘）"><option value="左→右"><option value="右→左"><option value="強風"></datalist>
+  </div>
+
+  <div class="main">
+    <div class="left">
+      <div class="fieldbox"><div class="hint" id="hint"></div><svg id="field" viewBox="0 0 1000 740" role="img" aria-label="落點格位球場，點格子記錄落點"></svg><a class="pq" id="pq" hidden title="在後台資訊中控只看這位打者的歷屆與本場落點"></a><div class="statp" id="statp"></div></div>
+      <div class="pad" id="pad"></div>
+    </div>
+    <div class="right">
+      <div class="gamebar" id="gamebar" hidden></div>
+      <div class="tblwrap"><table class="sheet" id="sheet"></table></div>
+      <div class="legend">打擊順序固定由第 1 棒到最後一棒再回第 1 棒，不可跳過（換人代打請按「PH 代打」）；已記過的格子可點回去修改。每個打席按完結果，下方面板點選回本壘的球員（打者打點自動＋1）；結果格的小數字＝該打席打點、●＝該打席上壘後回本壘得分，得分／打點欄為全場累計。
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" aria-live="polite"></div>
+<dialog id="dlg-pq" style="width:940px"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><h2 id="pq-title" style="margin:0">落點</h2><span id="pq-sub" style="color:var(--muted);font-size:14px"></span><button class="btn" id="pq-close" style="margin-left:auto">關閉</button></div>
+  <div class="pq-wrap"><svg id="pq-field" viewBox="0 0 1000 740" role="img" aria-label="這位打者的落點"></svg>
+  <div class="pq-side"><div id="pq-stat" class="pq-stat"></div><div class="pq-lg"><span><i class="h"></i>歷屆（淡）</span><span><i class="g"></i>本場（深）</span><span><i style="background:#dc2626"></i>安打</span><span><i style="background:#7c3aed"></i>全壘打</span><span><i style="background:#64748b"></i>出局</span><span><i style="background:#0d9488"></i>保送／失誤／野選</span></div><div id="pq-list" class="pq-list"></div></div></div>
+</dialog>
+<dialog id="dlg-end" style="width:620px"><h2>比賽結束</h2>
+  <p id="end-why" style="margin:0 0 6px;color:#b45309;font-weight:700"></p>
+  <div id="end-line" style="overflow-x:auto"></div>
+  <p id="end-clock" style="margin:6px 0;color:var(--muted);font-size:14px"></p>
+  <div id="end-reasons" class="end-reasons">
+    <label><input type="radio" name="endr" value="seven">打完 7 局</label>
+    <label><input type="radio" name="endr" value="time">比賽時間到</label>
+    <label><input type="radio" name="endr" value="nonew">時間將到，不開新局</label>
+    <label><input type="radio" name="endr" value="lead">時間到，後攻領先提前結束</label>
+    <label><input type="radio" name="endr" value="ump">裁判判定結束（棄權、天候等）</label>
+  </div>
+  <p id="end-state" style="margin:8px 0;font-size:14px"></p>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="end-cancel">繼續比賽</button><button class="btn" id="end-reopen" hidden>重新開啟紀錄表</button><button class="btn pri" id="end-ok">確認比賽結束</button></div>
+</dialog>
+<dialog id="dlg-clock" style="width:520px"><h2>比賽計時</h2>
+  <p id="ck-state" style="margin:0 0 10px;color:var(--muted);font-size:15px"></p>
+  <label class="ckrow">賽制<select id="ck-preset"><option value="pre">預賽：50 分鐘（滿 45 分鐘不開新局）</option><option value="ko">複決賽／排名賽：60 分鐘（滿 55 分鐘不開新局）</option></select></label>
+  <label class="ckrow">開賽時間<input id="ck-start" type="time"></label>
+  <p style="margin:8px 0;color:var(--muted);font-size:13px">依賽事規則：比賽 7 局或時間到為止，滿 45（複決賽 55）分鐘後不開新局；時間到時後攻在下半局領先即結束比賽。倒數到這些時間點會提醒紀錄員確認。</p>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="ck-reset" hidden>取消計時</button><button class="btn" id="ck-cancel">關閉</button><button class="btn pri" id="ck-go">開始計時</button></div>
+</dialog>
+<dialog id="dlg-pick"><h2>切換／刪除紀錄表</h2><p style="margin:0;color:var(--muted);font-size:15px">點紀錄表名稱切換；按「刪除」再按一次「確定刪除」才會刪掉，刪除前建議先匯出資料備份。</p><div class="list" id="pick-list"></div><div style="display:flex;justify-content:flex-end"><button class="btn" id="pick-close">關閉</button></div></dialog>
+<dialog id="dlg-sub"><h2>PH 代打</h2>
+  <p style="margin:0 0 8px;color:var(--muted);font-size:15px">選被替換的打擊次序，輸入代打背號。會在那一棒下方新增一行，之後輪到這一棒就由新的一行接著記。</p>
+  <div class="slots" id="sub-slots"></div>
+  <label style="display:flex;align-items:center;gap:10px;margin:12px 0 4px;font-weight:700">代打背號<input id="sub-no" inputmode="numeric" autocomplete="off" style="flex:1;font:700 22px var(--display);padding:6px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--surface)"></label>
+  <div id="sub-info" style="font-size:15px;color:var(--muted);min-height:24px"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn" id="sub-cancel">取消</button><button class="btn pri" id="sub-ok">確定代打</button></div>
+</dialog>
+<dialog id="dlg-pr"><h2>代跑</h2>
+  <p style="margin:0 0 6px;color:var(--muted);font-size:15px">選要被代跑的壘上跑者、代跑方式，再輸入代跑背號。</p>
+  <div style="font-weight:700;margin:6px 0 4px">壘上跑者</div><div class="slots" id="pr-runners" style="grid-template-columns:repeat(4,1fr)"></div>
+  <div style="font-weight:700;margin:10px 0 4px">代跑方式</div>
+  <div class="slots" id="pr-type" style="grid-template-columns:1fr 1fr">
+    <button type="button" data-t="0" class="sel"><b style="font-size:18px">臨時代跑</b><small>只跑這一次，不換人；下一輪原打者照常打擊（如秩序冊十八：女性受傷由男性代跑）</small></button>
+    <button type="button" data-t="1"><b style="font-size:18px">換人代跑</b><small>代跑者留在場上，原球員退場；之後輪到這一棒由代跑者打擊</small></button>
+  </div>
+  <label style="display:flex;align-items:center;gap:10px;margin:12px 0 4px;font-weight:700">代跑背號<input id="pr-no" inputmode="numeric" autocomplete="off" style="flex:1;font:700 22px var(--display);padding:6px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--surface)"></label>
+  <div id="pr-info" style="font-size:15px;color:var(--muted);min-height:24px"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn" id="pr-clear" style="margin-right:auto;color:#b42318">取消此代跑</button><button class="btn" id="pr-cancel">關閉</button><button class="btn pri" id="pr-ok">登記代跑</button></div>
+</dialog>
+<dialog id="dlg-pl" style="width:620px"><h2 id="pl-title">選擇球員</h2><p id="pl-sub" style="margin:0;color:var(--muted);font-size:15px"></p>
+  <div class="plist" id="pl-list"></div>
+  <div class="padd"><b>新增球員</b><input id="pl-name" placeholder="輸入姓名" autocomplete="off"><span class="sx" id="pl-sex"><button type="button" data-sx="M" class="sel">男</button><button type="button" data-sx="F">女</button></span><button class="btn pri" id="pl-add" type="button">新增並選用</button></div>
+  <div id="pl-msg" style="font-size:13px;color:var(--muted);min-height:18px;margin-top:6px"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px"><button class="btn" id="pl-skip">先不填姓名</button></div>
+</dialog>
+<dialog id="dlg-up" class="upbox" style="width:640px"><h2 id="up-title">上傳到管理後台</h2><div id="up-body"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn" id="up-close">關閉</button><button class="btn pri" id="up-ok" hidden>上傳</button></div>
+</dialog>
+<dialog id="dlg-new" class="ngbox" style="width:620px"><h2>新增一場比賽</h2>
+  <p style="margin:0;color:var(--muted);font-size:15px">一位紀錄員記錄攻守雙方：建立後有「先攻」「後攻」兩張表，三人出局自動換邊。背號會自動帶入該隊最近一場的打序。</p>
+  <label>賽程場次<select id="ng-game"><option value="">— 從賽程選（選了自動帶入雙方並連結本場）—</option></select></label>
+  <div id="ng-who" hidden><div class="ngq">誰先攻？<small>賽程只排對戰組合，請依現場猜拳／擲硬幣結果點選</small></div><div class="ngwho" id="ng-who-btns"></div></div>
+  <div id="ng-manual"><label>先攻隊伍<input id="ng-away" list="dl-team" autocomplete="off" placeholder="輸入或從清單選"></label>
+  <label>後攻隊伍<input id="ng-home" list="dl-team" autocomplete="off" placeholder="輸入或從清單選"></label></div>
+  <div style="display:flex;justify-content:flex-end"><button class="btn pri" id="ng-ok" type="button">建立整場比賽</button></div>
+  <h3 style="margin:14px 0 0;font-size:15px;color:var(--muted);border-top:1px dashed var(--rule);padding-top:10px">只記單一隊伍</h3>
+  <div class="list" id="copy-list"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="dlg-cancel">取消</button><button class="btn pri" id="dlg-blank">空白紀錄表</button></div>
+</dialog>
+
+<script>
+'use strict';
+/* ---------- 格位定義（依紙本第三版） ---------- */
+const S = 7.3, HX = 500, HY = 668;              // 1 公尺 = 7.3 單位；本壘位置
+const OUT_COLS = ['7', '78', '8', '810', '108', '10', '109', '9'];
+const IN_COLS = ['5', '56', '6', '64', '46', '4', '34', '3'];
+const col8 = i => [-45 + i * 11.25, -45 + (i + 1) * 11.25];
+const RINGS = [
+  { r: [1.2, 8.5], cols: [['25', -45, -15], ['1S', -15, 15], ['23', 15, 45]] },
+  { r: [8.5, 16], cols: [['16', -45, -10], ['1', -10, 10], ['13', 10, 45]] },
+  { r: [16, 26], cols: IN_COLS.map((c, i) => [c + 'S', ...col8(i)]) },
+  { r: [26, 36], cols: IN_COLS.map((c, i) => [c, ...col8(i)]), dirt: true },
+  { r: [36, 46], cols: IN_COLS.map((c, i) => [c + 'D', ...col8(i)]) },
+  { r: [46, 56], cols: OUT_COLS.map((c, i) => [c + 'S', ...col8(i)]) },
+  { r: [56, 67], cols: OUT_COLS.map((c, i) => [c, ...col8(i)]) },
+  { r: [67, 78], cols: OUT_COLS.map((c, i) => [c + 'D', ...col8(i)]) },
+  { r: [78, 88], cols: OUT_COLS.map((c, i) => [c + 'XD', ...col8(i)]) }
+];
+const FOUL = [[8.5, '25F', '23F'], [36, '5F', '3F'], [46, '5DF', '3DF'], [56, '75F', '95F'], [67, '7F', '9F'], [999, '7DF', '9DF']];
+const RES = [
+  { g: '上壘', cls: 'hit', list: [['1B', '一壘'], ['2B', '二壘'], ['3B', '三壘'], ['HR', '全壘'], ['BB', '保送'], ['FC', '野選'], ['E', '失誤上壘']] },
+  { g: '出局', cls: 'out', list: [['F', '高飛接殺'], ['G', '滾地封殺'], ['FS', '高犧推進'], ['GS', '滾犧推進'], ['K', '三振'], ['DP', '雙殺'], ['RE', '跑壘失誤']] }
+];
+const NOLOC = new Set(['BB', 'K']);
+const PA = 4;                                   // 每人固定 4 個打席欄（同紙本）
+const SLOTS = 12;                               // 棒次 1–12；替補不再預留空白列，需要時才在該棒下方新增
+
+/* ---------- 狀態（存在這台裝置） ---------- */
+const KEY = 'sb-iv3-sheets', $ = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let DB = { cur: '', sheets: {} }, undo = [];
+try { DB = JSON.parse(localStorage.getItem(KEY)) || DB; } catch (_) {}
+const today = () => { const d = new Date(); return d.toISOString().slice(0, 10); };
+const nowHM = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+function mkRow(slot, sub, no, from) { return { ord: sub ? `${slot}替` : String(slot), slot, sub, from: from || 0, no: no || '', loc: Array(PA).fill(''), res: Array(PA).fill(''), locNote: '', resNote: '', R: 0, RBI: 0 }; }
+function norm(sht) {            // 舊資料（第三版）轉換：代1–代6 有資料才保留成替補列
+  sht.rows = sht.rows.filter(r => r.slot != null || /^\d+$/.test(r.ord) || r.no || r.res.some(Boolean));
+  sht.rows.forEach(r => { if (r.slot == null) { if (/^\d+$/.test(r.ord)) { r.slot = +r.ord; r.sub = 0; } else { r.slot = 0; r.sub = 1; r.ord = '替'; } r.from = r.from || 0; } });
+  if (sht.cur.r >= sht.rows.length) sht.cur = { r: 0, c: 0, k: 'loc' };
+  return sht;
+}
+function blankSheet(copyFrom) {
+  const id = 's' + Date.now().toString(36);
+  const src = copyFrom ? copyFrom.rows.filter(r => !r.sub) : [];
+  const rows = Array.from({ length: SLOTS }, (_, i) => Object.assign(mkRow(i + 1, 0, src[i] ? src[i].no : ''), src[i] ? { pid: src[i].pid || '', name: src[i].name || '' } : {}));
+  rows.forEach(prep);
+  return { id, teamId: copyFrom ? copyFrom.teamId || '' : '', team: copyFrom ? copyFrom.team : '', field: copyFrom ? copyFrom.field : '', weather: '', wind: '', date: today(), time: nowHM(), rows, cur: { r: 0, c: 0, k: 'loc' }, updated: Date.now() };
+}
+Object.values(DB.sheets).forEach(norm);
+if (!DB.sheets[DB.cur]) { const s = blankSheet(); DB.sheets[s.id] = s; DB.cur = s.id; }
+Object.values(DB.sheets).forEach(recalc);
+const sh = () => DB.sheets[DB.cur];
+const ONBASE = new Set(['1B', '2B', '3B', 'HR', 'BB', 'FC', 'E']);
+function prep(r) {   // 每個打席各自記：sc＝這個打席上壘後有沒有回本壘得分（記是誰打回來的）、rbi＝這個打席的打點
+  if (!r.id) r.id = 'w' + Math.random().toString(36).slice(2, 9);
+  if (!r.sc) r.sc = Array(PA).fill('');
+  if (!r.rbi) r.rbi = Array(PA).fill(0);
+  if (!r.pr) r.pr = Array(PA).fill(null);
+  if (!r.inn) r.inn = Array(PA).fill(0);   // 這個打席在第幾局（按「換局」切換）   // 代跑：{ no: 代跑背號, swap: 是否換人 }
+  if (r.Rx == null) { r.Rx = r.R || 0; r.RBIx = r.RBI || 0; }   // 舊版手動記的數字保留
+  return r;
+}
+function totals(r) { prep(r); r.R = r.Rx + r.sc.filter((v, k) => v && !r.pr[k]).length; r.RBI = r.RBIx + r.rbi.reduce((a, b) => a + (b || 0), 0); }
+function recalc(x) {   // 有代跑的打席：回本壘的得分算給代跑者（依背號找人；不在名單就另列）
+  x.rows.forEach(r => { prep(r); } ); x.rows.forEach(r => r.res.forEach((v, k) => { if (v === 'HR' && !r.sc[k]) { r.sc[k] = r.id + ':' + k; r.rbi[k] = (r.rbi[k] || 0) + 1; } }));   // 全壘打：打者本人一定得分（舊資料自動補回）
+  x.rows.forEach(totals); x.prExtra = {};
+  x.rows.forEach(r => r.sc.forEach((v, k) => { if (!v || !r.pr[k]) return; const no = r.pr[k].no;
+    let t = null; x.rows.forEach(y => { if (y !== r && y.no === no) t = y; });
+    if (t) t.R++; else x.prExtra[no] = (x.prExtra[no] || 0) + 1; }));
+}
+function save() { sh().updated = Date.now(); recalc(sh()); try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (_) { toast('無法儲存在這台裝置，請匯出資料備份'); } if (typeof scheduleReport === 'function') scheduleReport(); }
+function snap() { undo.push(JSON.stringify({ id: DB.cur, s: sh() })); if (undo.length > 80) undo.shift(); $('undo').disabled = false; }
+let tt; function toast(m) {
+  const t = $('toast'), warn = /^[①②③]|不可|不能|請先|請填|請點選|失敗|沒有權限/.test(m);   // 提醒類訊息放畫面正中間
+  t.textContent = m; t.classList.toggle('mid', warn); t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), warn ? Math.max(2600, m.length * 70) : 1800);
+}
+
+/* ---------- 球場 ---------- */
+const GAM = 0.68, RD = d => 88 * S * Math.pow(Math.max(d, 0) / 88, GAM), DR = r => 88 * Math.pow(r / (88 * S), 1 / GAM); // 內野放大，方便點選
+const P = (a, d) => { const q = a * Math.PI / 180, r = RD(d); return [HX + r * Math.sin(q), HY - r * Math.cos(q)]; };
+function cellPath(a0, a1, r0, r1) {
+  const st = Math.max(2, Math.ceil((a1 - a0) / 3)), o = [], n = [];
+  for (let i = 0; i <= st; i++) { const a = a0 + (a1 - a0) * i / st; o.push(P(a, r1).map(v => v.toFixed(1)).join(',')); n.push(P(a, r0).map(v => v.toFixed(1)).join(',')); }
+  return 'M' + o.join(' L') + ' L' + n.reverse().join(' L') + 'Z';
+}
+function drawField() {
+  let h = '';
+  // 內野泥土區（灰）
+  h += `<path d="${cellPath(-45, 45, 3, 36)}" style="fill:var(--dirt);opacity:.55"/>`;
+  RINGS.forEach(R => R.cols.forEach(([code, a0, a1]) => {
+    const [cx, cy] = P((a0 + a1) / 2, (R.r[0] + R.r[1]) / 2), small = R.r[1] <= 26;
+    h += `<g class="cell-z" data-z="${code}"><path d="${cellPath(a0, a1, R.r[0], R.r[1])}" style="fill:transparent;stroke:var(--line);stroke-width:${R.r[0] >= 36 || R.r[1] === 36 ? 1.6 : 1}"/><text class="zlab${small ? ' s' : ''}" x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${code}</text></g>`;
+  }));
+  // 本壘、捕手區
+  h += `<g class="cell-z" data-z="2"><circle cx="${HX}" cy="${HY + 16}" r="22" style="fill:var(--surface);stroke:var(--line);stroke-width:1.6"/><text class="zlab" x="${HX}" y="${HY + 32}" text-anchor="middle">2</text></g>`;
+  h += `<rect x="${HX - 22}" y="${HY + 4}" width="11" height="20" style="fill:none;stroke:var(--line)"/><rect x="${HX + 11}" y="${HY + 4}" width="11" height="20" style="fill:none;stroke:var(--line)"/><path d="M${HX - 6} ${HY + 6} H${HX + 6} V${HY + 12} L${HX} ${HY + 16} L${HX - 6} ${HY + 12}Z" style="fill:var(--line)"/>`;
+  // 距離標示
+  [20, 40, 60, 80].forEach(m => { [-1, 1].forEach(sg => { const [x, y] = P(sg * 46.5, m); h += `<text class="mlab" x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle">${m}m</text>`; }); });
+  // 界外格位標示
+  FOUL.forEach(([d, L, Rr], i) => { const prev = i ? FOUL[i - 1][0] : 3, mid = Math.min((prev + Math.min(d, 92)) / 2, 84);
+    [[-1, L], [1, Rr]].forEach(([sg, c]) => { const [x, y] = P(sg * 53, mid); h += `<text class="flab" x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle">${c}</text>`; }); });
+  h += `<g id="mark"></g>`;
+  $('field').innerHTML = h;
+  try { const bb = $('field').getBBox(); if (bb.width > 100) $('field').setAttribute('viewBox', `${(bb.x - 6).toFixed(0)} ${(bb.y - 6).toFixed(0)} ${(bb.width + 12).toFixed(0)} ${(bb.height + 12).toFixed(0)}`); } catch (_) {}   // 去掉四周空白，球場放到最大
+}
+/* 點位 → 格位代碼（含界外） */
+function zoneAt(px, py) {
+  const x = px - HX, y = HY - py, d = DR(Math.hypot(x, y)), a = Math.atan2(x, y) * 180 / Math.PI;
+  if (y < 0 || d < 1.2) return Math.abs(Math.atan2(x, y) * 180 / Math.PI) > 135 || d < 1.2 ? '2' : (x < 0 ? '25F' : '23F');
+  if (Math.abs(a) > 45) { const f = FOUL.find(f => d < f[0]); return a < 0 ? f[1] : f[2]; }
+  for (const R of RINGS) if (d >= R.r[0] && d < R.r[1]) { const c = R.cols.find(([, a0, a1]) => a >= a0 && a <= a1); if (c) return c[0]; }
+  if (d >= 88) { const i = Math.min(7, Math.floor((a + 45) / 11.25)); return OUT_COLS[i] + 'XD'; }
+  return '';
+}
+$('field').addEventListener('click', e => {
+  const pt = $('field').createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const q = pt.matrixTransform($('field').getScreenCTM().inverse());
+  const z = zoneAt(q.x, q.y); if (!z) return;
+  setLoc(z, q.x, q.y);
+});
+
+/* ---------- 輸入 ---------- */
+function cur() { return sh().cur; }
+const starters = () => sh().rows.filter(r => !r.sub);
+function lineupN() { let n = 0; starters().forEach(r => { if (r.no || r.res.some(Boolean)) n = Math.max(n, r.slot); }); return Math.max(10, n); }   // 至少 10 棒；有背號的最後一棒＝一輪
+function activeIdx(slot) { let k = -1; sh().rows.forEach((r, i) => { if (r.slot === slot) k = i; }); return k; }   // 這一棒目前在場上的那一行（最後一位替補）
+function nextCol(row) { for (let k = row.from || 0; k < PA; k++) if (!row.res[k]) return k; return -1; }
+/* 使用順序：① 基本資料 → ② 背號 → ③ 記錄 */
+function ready() {
+  if (!sh().rows[cur().r].res[cur().c] && endedOf(sh())) { toast(`比賽已結束，不能再記新打席；要更正請按「🏁 比賽結束」重新開啟`); return false; }
+  if (!sh().rows[cur().r].res[cur().c] && cur().k !== 'stat' && partner(sh()) && !turnCheck()) return false;   // 先檢查半局順序：不是這一隊進攻就切到對方
+  if (!(sh().team || '').trim()) { toast('① 請先填寫最上方基本資料（隊伍）'); setTimeout(() => $('h-team').focus(), 30); return false; }
+  const missRow = starters().slice(0, 10).find(r => !r.no), miss = missRow ? sh().rows.indexOf(missRow) : -1, row = sh().rows[cur().r];
+  if (miss >= 0) { toast(`② 本場至少 10 棒，請先填第 ${missRow.slot} 棒的背號`); setTimeout(() => { const el = document.querySelector(`input[data-no="${miss}"]`); if (el) el.focus(); }, 30); return false; }
+  if (!row.no) { toast(`② 請先填第 ${row.ord} 棒的背號`); const rr = cur().r; setTimeout(() => { const el = document.querySelector(`input[data-no="${rr}"]`); if (el) el.focus(); }, 30); return false; }
+  if (!row.res[cur().c] && !turnCheck()) return false;   // 已記過的格子可修改；新打席要照半局順序
+  return true;
+}
+/* 整場比賽的半局順序：1 上 → 1 下 → 2 上 → 2 下…；對方這半局還沒結束，不能先記本隊下一個半局 */
+function myTurn(s) { const p = partner(s); if (!p) return true; const a = s.inning || 1, b = p.inning || 1; return s.side === 'away' ? a <= b : a < b; }
+const halfTxt = x => `第 ${x.inning || 1} 局${x.side === 'away' ? '上' : '下'}`;
+function turnCheck() {
+  const s = sh(), p = partner(s); if (myTurn(s)) return true;
+  DB.cur = p.id; save(); render();
+  toast(`${s.team} 的${halfTxt(s)}還不能記：${p.team} 的${halfTxt(p)}還沒結束（三人出局或按「換局 ▶」），已切換到 ${p.team}`);
+  return false;
+}
+function setLoc(z, x, y) {
+  if (cur().k === 'stat') advance();
+  if (!ready()) { render(); return; }
+  const c = cur(), row = sh().rows[c.r];
+  if (NOLOC.has(row.res[c.c])) { toast(`這一格結果是 ${row.res[c.c]}，三振、保送不能有落點`); return; }
+  snap();
+  row.loc[c.c] = z; c.k = 'res'; save();
+  render(); flash(x, y, z);
+  toast(`第 ${row.ord} 棒 第${"一二三四"[c.c]}輪 落點 ${z}，請點結果`);
+}
+function setRes(code) {
+  if (cur().k === 'stat') advance();
+  if (!ready()) { render(); return; }
+  { const c0 = cur(), r0 = sh().rows[c0.r]; if (!NOLOC.has(code) && (!r0.loc[c0.c] || r0.loc[c0.c] === '—')) { toast('③ 請先點球場記落點，再按結果（三振 K、保送 BB 不能有落點，直接按）'); render(); return; } }
+  const c = cur(), row = sh().rows[c.r]; snap();
+  row.res[c.c] = code;
+  if (NOLOC.has(code)) { if (row.loc[c.c] && row.loc[c.c] !== '—') setTimeout(() => toast(`三振、保送不能有落點，已清除落點`), 1900); row.loc[c.c] = '—'; }
+  save(); toast(`第 ${row.ord} 棒 ${row.no ? '#' + row.no + ' ' : ''}第${"一二三四"[c.c]}輪：${row.loc[c.c] && row.loc[c.c] !== '—' ? row.loc[c.c] + '・' : ''}${code}`);
+  const fresh = !row.inn[c.c];
+  if (fresh) row.inn[c.c] = sh().inning || 1;
+  const key = row.id + ':' + c.c;
+  if (code === 'HR' && !row.sc[c.c]) { row.sc[c.c] = key; row.rbi[c.c] = (row.rbi[c.c] || 0) + 1; }      // 全壘打：打者自己得分，打點＋1
+  if (code !== 'HR' && row.sc[c.c] === key) { row.sc[c.c] = ''; row.rbi[c.c] = Math.max(0, row.rbi[c.c] - 1); }
+  c.k = 'stat'; save(); render();   // 先停在「有沒有人回本壘」，沒有就直接記下一棒
+  if (fresh && row.inn[c.c] === (sh().inning || 1) && outsIn(sh(), row.inn[c.c]) >= 3) autoInning();
+}
+/* 換下一棒：依打擊次序輪；有替補的棒次由最後一位替補那一行接著記 */
+/* 打擊順序：第 1 棒 → 最後一棒 → 回第 1 棒，不可跳過；唯一例外是該棒被替補取代（由替補那一行接） */
+function rowAt(slot, k) { let idx = -1; sh().rows.forEach((r, i) => { if (r.slot === slot && (r.from || 0) <= k) idx = i; }); return idx; }
+function due() {
+  const n = lineupN();
+  for (let k = 0; k < PA; k++) for (let sl = 1; sl <= n; sl++) { const i = rowAt(sl, k); if (i >= 0 && !sh().rows[i].res[k]) return { r: i, c: k }; }
+  return null;
+}
+const posName = d => { const r = sh().rows[d.r]; return `第 ${r.slot} 棒${r.sub ? '（替補）' : ''}${r.no ? ' #' + r.no : ''}・第${'一二三四'[d.c]}輪`; };
+function advance() {
+  const c = cur(), d = due();
+  if (!d) { toast('四輪都已記滿，第五輪請寫在備註'); c.k = 'loc'; save(); return; }
+  if (d.c > c.c && !sh().rows[c.r].res[c.c + 1]) setTimeout(() => toast(`第${'一二三四'[c.c]}輪打完，進入第${'一二三四'[d.c]}輪`), 1900);
+  sh().cur = { r: d.r, c: d.c, k: 'loc' }; save();
+}
+function pick(r, c, k) {
+  const row = sh().rows[r], d = due();
+  if (row.loc[c] || row.res[c] || (d && d.r === r && d.c === c)) { sh().cur = { r, c, k }; save(); render(); return; }   // 已記過的格子可修改；或正好輪到他
+  if (d) { sh().cur = { r: d.r, c: d.c, k: 'loc' }; save(); render(); toast(`打擊順序不可跳過：現在輪到${posName(d)}`); }
+}
+
+/* ---------- 替補上場 ---------- */
+let subSlot = 1;
+function subFrom(slot) { const row = sh().rows[activeIdx(slot)]; const k = nextCol(row); return k < 0 ? PA - 1 : k; }
+function renderSub() {
+  const n = lineupN();
+  $('sub-slots').innerHTML = Array.from({ length: n }, (_, i) => { const r = sh().rows[activeIdx(i + 1)]; return `<button type="button" data-slot="${i + 1}"${i + 1 === subSlot ? ' class="sel"' : ''}><b>${i + 1}</b><small>${r.no ? '#' + r.no : '—'}${r.sub ? '（替）' : ''}</small></button>`; }).join('');
+  const old = sh().rows[activeIdx(subSlot)];
+  $('sub-info').innerHTML = `第 <b>${subSlot}</b> 棒 ${old.no ? '#' + old.no : ''} 退場，代打從第 <b>${'一二三四'[subFrom(subSlot)]}</b> 輪開始記`;
+}
+function openSub() {
+  if (!ready()) { render(); return; }
+  { const d = due(); subSlot = (cur().k === 'stat' && d ? sh().rows[d.r].slot : sh().rows[cur().r].slot) || 1; } $('sub-no').value = ''; renderSub(); $('dlg-sub').showModal(); setTimeout(() => $('sub-no').focus(), 50);
+};
+$('sub-slots').onclick = e => { const b = e.target.closest('[data-slot]'); if (!b) return; subSlot = +b.dataset.slot; renderSub(); $('sub-no').focus(); };
+$('sub-cancel').onclick = () => $('dlg-sub').close();
+$('sub-no').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('sub-ok').click(); } };
+/* 同一位球員不能同時在兩個棒次上場；被換下的球員只能回到原棒次（秩序冊十三：先發球員可回場一次） */
+function lineupConflict(slot, no, pid, self) {
+  const s = sh(); if (!no) return '';
+  const dupNo = !pid && RO.players.filter(p => p.teamId === s.teamId && p.no === String(no)).length > 1;   // 名單上同背號有兩人以上：等選定人再比對
+  for (const r of s.rows) {
+    if (r === self || !r.no || (dupNo && r.pid)) continue;
+    const same = pid && r.pid ? r.pid === pid : String(r.no) === String(no); if (!same) continue;
+    const nm = `#${r.no}${r.name ? ' ' + r.name : ''}`, active = activeIdx(r.slot) === s.rows.indexOf(r);
+    if (r.slot === slot) { if (active) return `${nm} 就是第 ${slot} 棒目前在場上的球員`; continue; }
+    return active ? `${nm} 已在第 ${r.slot} 棒上場，同一位球員不能同時上場兩個棒次` : `${nm} 先前在第 ${r.slot} 棒出賽後已被換下，不能改到第 ${slot} 棒上場`;
+  }
+  return '';
+}
+$('sub-ok').onclick = () => {
+  const no = $('sub-no').value.trim(); if (!no) { $('sub-info').innerHTML = '<b style="color:#b42318">請輸入代打背號</b>'; $('sub-no').focus(); return; }
+  { const m = lineupConflict(subSlot, no, '', null); if (m) { $('sub-info').innerHTML = `<b style="color:#b42318">${esc(m)}</b>`; $('sub-no').select(); return; } }
+  snap();
+  const s = sh(), at = activeIdx(subSlot), old = s.rows[at], from = subFrom(subSlot), nsub = s.rows.filter(r => r.slot === subSlot).length;
+  const row = prep(mkRow(subSlot, nsub, no, from)); row.locNote = `換下 #${old.no || '?'}`;
+  s.rows.splice(at + 1, 0, row); setTimeout(() => matchRow(s.rows.indexOf(row), true), 50);
+  if (s.cur.r > at) s.cur.r++;
+  if (s.cur.r === at && !old.res[s.cur.c] && s.cur.k !== 'stat') s.cur = { r: at + 1, c: from, k: 'loc' };   // 正要打的就是被換的人 → 直接換到替補這一行
+  save(); render(); $('dlg-sub').close();
+  toast(`第 ${subSlot} 棒 PH 代打 #${no} 上場（換下 #${old.no || '?'}），從第${'一二三四'[from]}輪起由這一行接著記`);
+};
+function bump(f, d) { const row = sh().rows[cur().r]; snap(); row[f] = Math.max(0, (row[f] || 0) + d); save(); render(); }
+
+/* ---------- 畫面 ---------- */
+function renderPad() {
+  let h = '';
+  RES.forEach(G => { h += `<div class="grp">${G.g}</div>` + G.list.map(([k, l]) => `<button type="button" class="code ${G.cls}" data-res="${k}"><b>${k}</b><span>${l}</span></button>`).join(''); });
+  h += `<div class="grp">其他</div><div class="rowtools">
+    <button type="button" class="code etc" data-pr="1" style="min-width:70px"><b>PR</b><span>代跑</span></button>
+    <button type="button" class="code etc" id="subbtn" style="min-width:70px"><b>PH</b><span>代打</span></button>
+    <button type="button" class="btn" id="clr">清除這一格</button>
+    <button type="button" class="btn pri" id="next" style="margin-left:auto">下一棒 ▶</button></div>`;
+  $('pad').innerHTML = h;
+}
+$('pad').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.res) setRes(b.dataset.res);
+  else if (b.dataset.b) { const [f, d] = b.dataset.b.split(':'); bump(f, +d); }
+  else if (b.dataset.pr) openPR();
+  else if (b.id === 'subbtn') openSub();
+  else if (b.id === 'next') { const c = cur(), row = sh().rows[c.r]; if (c.k !== 'stat' && !row.res[c.c]) { toast(`${posName(c)} 還沒記結果，打擊順序不可跳過`); return; } advance(); render(); }
+  else if (b.id === 'clr') { const c = cur(), row = sh().rows[c.r]; snap(); unlinkPA(row, c.c); row.loc[c.c] = ''; row.res[c.c] = ''; row.inn[c.c] = 0; c.k = 'loc'; save(); render(); }
+});
+function setFocus(s) { try { if (s.link && s.link.gid) localStorage.setItem('sb-focus', JSON.stringify({ t: s.link.tid, g: s.link.gid, no: s.link.gameNo, at: Date.now() })); } catch (_) {} }
+function render() {
+  const s = sh(), c = s.cur, cols = Math.max(4, ...s.rows.map(r => { let m = 0; r.res.forEach((v, i) => { if (v || r.loc[i]) m = i + 1; }); return m; }), c.c + 1);
+  const n = PA;
+  let h = `<colgroup><col style="width:34px"><col style="width:38px"><col style="width:58px">${'<col>'.repeat(n)}<col style="width:38px">${'<col>'.repeat(n)}<col style="width:38px"><col style="width:38px"><col style="width:38px"></colgroup>
+    <thead><tr><th rowspan="2">棒次</th><th rowspan="2">背號</th><th rowspan="2">姓名</th><th class="g-loc" colspan="${n + 1}">落點</th><th class="g-res" colspan="${n + 1}">結果</th><th rowspan="2" style="background:var(--etc)">得分</th><th rowspan="2" style="background:var(--etc)">打點</th></tr>
+    <tr>${Array.from({ length: n }, (_, i) => `<th class="g-loc">${'一二三四五'[i]}</th>`).join('')}<th class="g-loc">備註</th>${Array.from({ length: n }, (_, i) => `<th class="g-res">${'一二三四五'[i]}</th>`).join('')}<th class="g-res">備註</th></tr></thead><tbody>`;
+  const dupKeys = new Set(), seenK = new Set();   // 同一位球員同時在兩個棒次（舊資料或手動改背號造成）
+  s.rows.forEach((r, i) => { if (!r.no || activeIdx(r.slot) !== i) return; const k = r.pid || '#' + r.no; if (seenK.has(k)) dupKeys.add(k); seenK.add(k); });
+  s.rows.forEach((r, i) => {
+    const on = i === c.r;
+    const gone = activeIdx(r.slot) !== i, dup = !gone && r.no && dupKeys.has(r.pid || '#' + r.no);
+    h += `<tr class="${r.sub ? 'sub' : ''}${gone ? ' gone' : ''}${on ? ' cur' : ''}${dup ? ' dup' : ''}"${dup ? ' title="同一位球員同時在兩個棒次上場，請修正背號或替補"' : ''}><td class="ord" title="${r.sub ? '替補' : '先發'}">${r.slot || ''}${r.sub ? '<span class="tsub">替</span>' : ''}</td><td class="no"><input data-no="${i}" inputmode="numeric" value="${r.no}" aria-label="第 ${r.ord} 棒背號"></td>${nameCell(r, i)}`;
+    for (let k = 0; k < n; k++) h += `<td class="c loc${(r.loc[k] || '').length >= 4 ? ' long' : ''}${on && k === c.c ? (c.k === 'loc' ? ' on' : ' pair') : ''}" data-r="${i}" data-c="${k}" data-k="loc">${r.loc[k] || ''}${r.inn[k] && (r.loc[k] || r.res[k]) ? `<sub class="inn" title="第 ${r.inn[k]} 局">${r.inn[k]}</sub>` : ''}</td>`;
+    h += `<td class="note"><input data-note="${i}:locNote" value="${r.locNote.replace(/"/g, '&quot;')}" aria-label="落點備註"></td>`;
+    for (let k = 0; k < n; k++) h += `<td class="c res${on && k === c.c ? (c.k === 'res' ? ' on' : ' pair') : ''}" data-r="${i}" data-c="${k}" data-k="res">${r.res[k] || ''}${r.rbi[k] ? `<sup>${r.rbi[k]}</sup>` : ''}${r.sc[k] ? '<i class="run">●</i>' : ''}${r.pr[k] ? `<span class="prm" title="${r.pr[k].swap ? '換人代跑' : '臨時代跑'}">PR${r.pr[k].no}</span>` : ''}</td>`;
+    h += `<td class="note"><input data-note="${i}:resNote" value="${r.resNote.replace(/"/g, '&quot;')}" aria-label="結果備註"></td><td class="num r${on && c.k === 'stat' ? ' on' : ''}" data-n="${i}" data-f="R">${r.R || ''}</td><td class="num${on && c.k === 'stat' ? ' on' : ''}" data-n="${i}" data-f="RBI">${r.RBI || ''}</td></tr>`;
+  });
+  const lr = lineRuns(s), lrTxt = lr.length ? '逐局得分：' + lr.map((v, i) => `${i + 1}局 ${v}`).join('｜') : '', ex = s.prExtra || {}, exTxt = Object.keys(ex).map(k => `#${k}×${ex[k]}`).join('、'), tR = s.rows.reduce((a, r) => a + (r.R || 0), 0) + Object.values(ex).reduce((a, b) => a + b, 0), tB = s.rows.reduce((a, r) => a + (r.RBI || 0), 0);
+  h += `</tbody><tfoot><tr><td colspan="${2 * n + 5}" style="text-align:right;padding-right:10px;font-weight:700">${lrTxt ? `<span style="float:left;padding-left:10px;font-weight:600">${lrTxt}</span>` : ''}${exTxt ? `<span style="font-weight:500;color:var(--muted);margin-right:12px">含代跑得分（不在名單）：${exTxt}</span>` : ''}全場合計</td><td class="tot">${tR}</td><td class="tot">${tB}</td></tr></tfoot>`;
+  const ae = document.activeElement, keep = ae && $('sheet').contains(ae) ? (ae.dataset.no != null ? `input[data-no="${ae.dataset.no}"]` : ae.dataset.note ? `input[data-note="${ae.dataset.note}"]` : '') : '';
+  $('sheet').innerHTML = h;
+  if (keep) { const el = $('sheet').querySelector(keep); if (el) el.focus(); }   // 重畫表格時保留正在輸入的欄位
+  const row = s.rows[c.r];
+  const step = !(s.team || '').trim() ? '<b>①</b> 先填最上方基本資料（隊伍、球場、天氣、風勢）' : starters().slice(0, 10).some(r => !r.no) ? '<b>②</b> 在表格「背號」欄填本場第 1–10 棒背號（至少 10 人，按 Enter 換下一棒）' : '';
+  $('hint').innerHTML = step || `第 <b>${s.inning || 1}</b> 局・第 <b>${row.ord}</b> 棒${row.no ? ' #' + row.no : ''}${row.name ? ' ' + esc(row.name) : ''}・第 <b>${'一二三四'[c.c]}</b> 輪　${c.k === 'loc' ? '點球場記落點（三振、保送不點落點，直接按結果）' : c.k === 'stat' ? '有人回本壘就在下方面板點選；沒有就直接記下一棒' : '請按結果代碼'}`;
+  { const pq = $('pq'), on = !step && row.pid && s.teamId; pq.hidden = !on;   // 查此打者：放在球場右下角空白處，不遮球場
+    if (on) { pq.dataset.pid = row.pid; pq.dataset.ri = c.r; pq.href = `index.html?t=${encodeURIComponent(s.tid || RO.tid || '')}&g=${encodeURIComponent((s.link && s.link.gid) || '')}&p=${encodeURIComponent(row.pid)}&tm=${encodeURIComponent(s.teamId)}`; pq.innerHTML = `🔍 查此打者<small>${row.no ? '#' + esc(row.no) + ' ' : ''}${esc(row.name || '')} 歷屆落點</small>`; } }
+  { const pt = partner(s), wait = !!(pt && !myTurn(s) && c.k !== 'stat' && !row.res[c.c]);   // 不是這一隊進攻的半局：只能查看，不能記新打席
+    document.querySelector('.app').classList.toggle('waiting', wait);
+    if (wait) { $('hint').innerHTML = `<span class="waitmsg">⏸ 現在輪到 <b>${esc(nickOf(pt.team))}</b> ${halfTxt(pt)}進攻；${esc(nickOf(s.team))} 的${halfTxt(s)}要等對方三人出局（或按「換局 ▶」）才能記錄</span><button type="button" class="btn pri" id="go-turn">切換到 ${esc(nickOf(pt.team))} ▶</button>`; $('pq').hidden = true; } }
+  document.querySelector('.app').classList.toggle('stat', c.k === 'stat');
+  renderStat();
+  ['team', 'field', 'weather', 'wind', 'date', 'time'].forEach(k => { const el = $('h-' + k); if (document.activeElement !== el) el.value = s[k] || ''; });
+  teamBadge();   // 切換紀錄表或建立新比賽後，名單人數要跟著換成這一隊
+  { const e = endedOf(s), eb = $('endbtn'); eb.textContent = e ? '🏁 已結束' : '🏁 比賽結束'; eb.className = 'btn' + (e ? ' ended' : ''); document.querySelector('.app').classList.toggle('ended', !!e && !s.rows[c.r].res[c.c]);
+    if (e && !s.rows[c.r].res[c.c]) { $('hint').innerHTML = `<span class="waitmsg">🏁 比賽已結束（${esc(END_REASONS[e.reason] || '')}）：只能查看或修改已記的格子。記得按「☁ 上傳」</span>`; $('pq').hidden = true; } }
+  if (typeof tickClock === 'function') { tickClock(); setTimeout(checkWalkoff, 0); }
+  $('sheets').textContent = sheetShort(s) + ' ▾'; $('sheets').title = sheetName(s);
+  $('inn-n').textContent = s.inning || 1; setFocus(s);
+  { const h = $('inn-h'), pr = !!partner(s); h.hidden = !pr; if (pr) { const up = s.side === 'away'; h.className = 'ih ' + (up ? 'top' : 'bot'); h.textContent = up ? '▲上' : '▼下'; h.title = up ? '上半局：先攻隊進攻' : '下半局：後攻隊進攻'; } }
+  repStatus(); renderGameBar();
+  { const o = Math.min(3, outsIn(s, s.inning || 1)); $('outs').innerHTML = '出局' + [0, 1, 2].map(k => `<i data-o="${k + 1}" class="${k < o ? 'on' : ''}"></i>`).join(''); }
+  { const same = s.upload && s.upload.sig === sigOf(s); $('upbtn').classList.toggle('done', !!same); $('upbtn').textContent = s.upload ? (same ? '☁ 已上傳' : '☁ 重新上傳') : '☁ 上傳'; }
+  markZone(row.loc[c.c]);
+  const tdOn = $('sheet').querySelector('td.on'); if (tdOn) tdOn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+function markZone(z) { $('field').querySelectorAll('.cell-z path').forEach(p => p.style.fill = 'transparent'); if (!z) return; const g = $('field').querySelector(`.cell-z[data-z="${z}"] path`); if (g) g.style.fill = 'color-mix(in srgb,var(--cur) 28%,transparent)'; }
+function flash(x, y, z) { $('mark').innerHTML = `<circle cx="${x}" cy="${y}" r="9" style="fill:var(--cur);opacity:.85"/><circle cx="${x}" cy="${y}" r="16" style="fill:none;stroke:var(--cur);stroke-width:2;opacity:.6"/>`; clearTimeout(flash.t); flash.t = setTimeout(() => $('mark').innerHTML = '', 1400); }
+
+
+
+/* ---------- 球隊／球員資料庫：背號自動對到人名 ----------
+   名單來自系統的賽事名單（公開可讀，不必登入）；載入後存在這台平板，離線也能比對。
+   新增的球員：登入的紀錄員會直接寫入系統名單；沒網路時先存在平板，上傳時一起送出。 */
+const RKEY = 'sb-iv3-roster';
+let RO = { tid: '', tname: '', teams: [], players: [], at: 0 };
+try { RO = Object.assign(RO, JSON.parse(localStorage.getItem(RKEY)) || {}); } catch (_) {}
+const saveRO = () => { try { localStorage.setItem(RKEY, JSON.stringify(RO)); } catch (_) {} };
+const normT = v => String(v || '').replace(/[\s（）()]/g, '');
+async function loadRoster(tid) {
+  if (!UPFB) return false;
+  try {
+    const ts = (await UPFB.db.collection('tournaments').get()).docs.map(d => Object.assign({ id: d.id }, d.data()));
+    if (!ts.length) return false;
+    const t = ts.find(x => x.id === (tid || sh().tid || RO.tid)) || (ts.some(x => !x.archived) ? ts.filter(x => !x.archived) : ts).sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')))[0];
+    const T = UPFB.db.collection('tournaments').doc(t.id);
+    const [tm, ps] = await Promise.all([T.collection('teams').get(), T.collection('players').get()]);
+    const local = RO.tid === t.id ? RO.players.filter(p => p.pending) : [];
+    RO = { tid: t.id, tname: t.name || '', teams: tm.docs.map(d => ({ id: d.id, name: d.data().name || d.id })), players: ps.docs.map(d => { const x = d.data(); return { id: d.id, teamId: x.teamId, no: String(x.no ?? ''), name: x.name || '', sex: x.sex || '' }; }).concat(local), at: Date.now() };
+    saveRO(); return true;
+  } catch (_) { return false; }
+}
+function matchTeam() {
+  const s = sh(), v = normT(s.team); let t = null;
+  if (v) { const hit = RO.teams.filter(x => normT(x.name) === v); t = hit.length === 1 ? hit[0] : null;
+    if (!t) { const part = RO.teams.filter(x => normT(x.name).includes(v)); if (part.length === 1) t = part[0]; } }
+  const was = s.teamId; s.teamId = t ? t.id : ''; if (t) s.tid = RO.tid;
+  if (was !== s.teamId) { s.rows.forEach((r, i) => { if (r.no) { r.pid = ''; r.name = ''; autoName(i); } }); }
+  teamBadge();
+}
+function teamBadge() {
+  const s = sh(), b = $('team-badge'); if (!b) return;
+  if (!RO.teams.length) { b.className = 'tbadge'; b.textContent = UPFB ? '名單載入中…' : '離線：無名單'; return; }
+  if (!s.team) { b.className = 'tbadge'; b.textContent = `名單 ${RO.teams.length} 隊`; return; }
+  const t = RO.teams.find(x => x.id === s.teamId);
+  b.className = 'tbadge ' + (t ? 'ok' : 'no'); b.textContent = t ? `✓ 名單 ${RO.players.filter(p => p.teamId === t.id).length} 人` : '找不到，請從清單選'; b.title = t ? t.name : '';
+}
+const candOf = r => sh().teamId ? RO.players.filter(p => p.teamId === sh().teamId && p.no === String(r.no)) : [];
+function autoName(i) { const r = sh().rows[i], c = candOf(r); if (c.length === 1) { r.pid = c[0].id; r.name = c[0].name; return 1; } return c.length; }
+function matchRow(i, ask) {   // 背號 → 人名：剛好一位自動帶入；兩位以上（或要新增）跳出選擇
+  const r = sh().rows[i]; if (!r || !r.no || !sh().teamId) { render(); return; }
+  const n = autoName(i); save(); render();
+  if (n === 1) toast(`第 ${r.slot} 棒 #${r.no} ${r.name}`);
+  else if (ask && n > 1) openPL(i);
+}
+function nameCell(r, i) {
+  if (!r.no) return `<td class="nm" data-nm="${i}"></td>`;
+  if (r.name) return `<td class="nm" data-nm="${i}" title="點一下可改選">${esc(r.name)}${r.pid && String(r.pid).startsWith('L') ? '＊' : ''}</td>`;
+  if (!sh().teamId) return `<td class="nm" data-nm="${i}" style="color:var(--muted)">—</td>`;
+  const n = candOf(r).length;
+  return n > 1 ? `<td class="nm multi" data-nm="${i}">${n} 人同號▾</td>` : `<td class="nm add" data-nm="${i}">＋新增</td>`;
+}
+const PL = { i: -1, sex: 'M', next: -1 };
+function openPL(i) {
+  const s = sh(), r = s.rows[i]; PL.i = i; PL.sex = 'M';
+  if (!s.teamId) { toast('先在「隊伍」選名單上的球隊，才能對到人名'); return; }
+  const c = candOf(r), t = RO.teams.find(x => x.id === s.teamId);
+  $('pl-title').textContent = `第 ${r.slot} 棒${r.sub ? '（替補）' : ''} #${r.no} 是誰？`;
+  $('pl-sub').textContent = c.length > 1 ? `${t.name} 名單上有 ${c.length} 位 #${r.no}，請選一位；都不是就新增。` : c.length ? '點選或新增另一位。' : `${t.name} 名單上沒有 #${r.no}，可以直接新增。`;
+  $('pl-list').innerHTML = c.map(p => `<button type="button" data-pid="${p.id}"${p.id === r.pid ? ' class="sel"' : ''}><span>#${esc(p.no)} ${esc(p.name)}</span><small>${p.sex === 'F' ? '女' : p.sex === 'M' ? '男' : ''}${p.pending ? '・待上傳' : ''}</small></button>`).join('');
+  $('pl-name').value = ''; $('pl-msg').textContent = ''; $('pl-sex').querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.sx === PL.sex));
+  if (!$('dlg-pl').open) $('dlg-pl').showModal(); setTimeout(() => (c.length ? $('pl-list').querySelector('button') : $('pl-name')).focus(), 30);
+}
+function closePL() { $('dlg-pl').close(); const n = PL.next; PL.next = -1; save(); render(); if (n >= 0) setTimeout(() => { const el = document.querySelector(`input[data-no="${n}"]`); if (el && n < 12) el.focus(); }, 30); }
+$('pl-list').onclick = e => { const b = e.target.closest('[data-pid]'); if (!b) return; const r = sh().rows[PL.i], p = RO.players.find(x => x.id === b.dataset.pid); { const m = lineupConflict(r.slot, r.no, p.id, r); if (m) { $('pl-msg').innerHTML = `<b style="color:#b42318">${esc(m)}</b>`; return; } } snap(); r.pid = p.id; r.name = p.name; toast(`第 ${r.slot} 棒 #${r.no} ${p.name}`); closePL(); };
+$('pl-sex').onclick = e => { const b = e.target.closest('[data-sx]'); if (!b) return; PL.sex = b.dataset.sx; $('pl-sex').querySelectorAll('button').forEach(x => x.classList.toggle('sel', x === b)); };
+$('pl-skip').onclick = () => closePL();
+$('pl-name').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('pl-add').click(); } };
+$('pl-add').onclick = async () => {
+  const nm = $('pl-name').value.trim(); if (!nm) { $('pl-msg').innerHTML = '<b style="color:#b42318">請輸入姓名</b>'; $('pl-name').focus(); return; }
+  const s = sh(), r = s.rows[PL.i]; snap();
+  const p = { id: 'L' + Date.now().toString(36), teamId: s.teamId, no: String(r.no), name: nm, sex: PL.sex, pending: true };
+  RO.players.push(p); saveRO(); r.pid = p.id; r.name = nm;
+  await pushPending(); toast(`已新增 #${r.no} ${nm}${p.pending ? '（先存在這台平板，上傳時一起寫入系統名單）' : '（已寫入系統名單）'}`);
+  closePL();
+};
+async function pushPending() {   // 把平板上新增的球員寫進系統名單（需登入紀錄員）
+  if (!UPFB || !UP.user || !['admin', 'scorer'].includes(UP.role)) return 0;
+  let n = 0;
+  for (const p of RO.players.filter(x => x.pending && x.teamId)) {
+    try {
+      const ref = UPFB.db.collection('tournaments').doc(RO.tid).collection('players').doc();
+      await ref.set({ teamId: p.teamId, no: p.no, name: p.name, sex: p.sex || '', createdBy: UP.user.uid, createdAt: UPFB.TS() });
+      const old = p.id; p.id = ref.id; delete p.pending; n++;
+      Object.values(DB.sheets).forEach(x => x.rows.forEach(r => { if (r.pid === old) r.pid = ref.id; }));
+    } catch (_) { break; }
+  }
+  if (n) { saveRO(); save(); }
+  return n;
+}
+function fillTeamList() { $('dl-team').innerHTML = RO.teams.map(t => `<option value="${esc(t.name)}">`).join(''); teamBadge(); }
+
+
+/* ---------- 一場比賽記雙方：先攻／後攻兩張表配對，三人出局自動換邊 ---------- */
+let NG = { games: [] };
+async function ngLoadGames() {
+  const sel = $('ng-game'); sel.innerHTML = '<option value="">— 從賽程選（選了自動帶入雙方並連結本場）—</option>';
+  if (!UPFB || !RO.tid) return;
+  try {
+    const gs = (await UPFB.db.collection('tournaments').doc(RO.tid).collection('games').get()).docs.map(d => Object.assign({ id: d.id }, d.data()));
+    const tn = id => (RO.teams.find(t => t.id === id) || {}).name || '';
+    NG.games = gs.filter(g => g.status !== 'final').sort((a, b) => (+a.gameNo || 0) - (+b.gameNo || 0));
+    sel.innerHTML += NG.games.map(g => `<option value="${g.id}">第 ${esc(g.gameNo || '')} 場｜${esc(tn(g.awayId))} vs ${esc(tn(g.homeId))}${g.field ? '｜' + esc(g.field) : ''}</option>`).join('');
+  } catch (_) {}
+}
+/* 先後攻現場決定：選了場次後由紀錄員點「哪一隊先攻」，建立時回報到賽程（必要時對調賽程的先後攻） */
+function canSwapSides(g) { const inn = g.innings || {}; return (g.status || 'scheduled') !== 'final' && ![...(inn.away || []), ...(inn.home || [])].some(v => v != null && v !== ''); }
+function swapPatch(g) { const inn = g.innings || {}, lu = g.lineups || {};
+  return { awayId: g.homeId, homeId: g.awayId, awayScore: g.homeScore ?? null, homeScore: g.awayScore ?? null, innings: { away: inn.home || [], home: inn.away || [] }, lineups: { away: lu.home || [], home: lu.away || [] }, outsAdj: {} }; }
+const tnOf = id => (RO.teams.find(t => t.id === id) || {}).name || '';
+function ngWho() {
+  const g = NG.games.find(x => x.id === $('ng-game').value);
+  $('ng-who').hidden = !g; $('ng-manual').hidden = !!g;
+  if (!g) return;
+  const had = !canSwapSides(g);   // 已有回報的比分：仍可改，比分會跟著各自的隊伍一起對調
+  $('ng-who-btns').innerHTML = [g.awayId, g.homeId].map(id => `<button type="button" data-first="${id}" class="${NG.first === id ? 'on' : ''}">${esc(tnOf(id))}<small>${NG.first === id ? '✓ 先攻' : NG.first ? '後攻' : '點選＝這隊先攻'}</small></button>`).join('')
+    + (had ? `<small style="grid-column:1/-1;color:var(--muted)">這場已有回報的比分；建立後會清除舊比分，改由新紀錄表重新回報</small>` : '');
+}
+$('ng-game').onchange = () => { NG.first = ''; ngWho(); };
+$('ng-who-btns').onclick = e => { const b = e.target.closest('[data-first]'); if (!b || b.disabled) return; NG.first = b.dataset.first; ngWho(); };
+function teamByName(v) { const n = normT(v); if (!n) return null; const hit = RO.teams.filter(x => normT(x.name) === n); if (hit.length === 1) return hit[0]; const part = RO.teams.filter(x => normT(x.name).includes(n)); return part.length === 1 ? part[0] : null; }
+function sideSheet(name, side, g) {
+  const t = teamByName(name), prev = Object.values(DB.sheets).filter(x => (t ? x.teamId === t.id : normT(x.team) === normT(name)) && x.rows.some(r => r.no)).sort((a, b) => b.updated - a.updated)[0];
+  const s = blankSheet(prev); s.id = 's' + Date.now().toString(36) + side[0];
+  s.team = t ? t.name : name; s.teamId = t ? t.id : ''; s.tid = RO.tid; s.side = side; s.inning = 1; delete s.ended; delete s.clock; s.round = g ? g.round || '' : '';
+  if (g) { s.field = g.field || s.field; s.link = { tid: RO.tid, gid: g.id, side, gameNo: String(g.gameNo || ''), team: s.team }; s.reported = {}; }
+  return s;
+}
+$('ng-ok').onclick = () => {
+  const g = NG.games.find(x => x.id === $('ng-game').value) || null;
+  if (g && !NG.first) { toast('請先點選哪一隊先攻（依現場猜拳／擲硬幣結果）'); return; }
+  const a = g ? tnOf(NG.first) : $('ng-away').value.trim(), h = g ? tnOf(NG.first === g.awayId ? g.homeId : g.awayId) : $('ng-home').value.trim();
+  if (!a || !h) { toast('請填先攻與後攻隊伍'); return; }
+  if (g) Object.values(DB.sheets).forEach(x => { if (x.link && x.link.gid === g.id) { delete x.link; x.reported = {}; } });   // 同一場之前建立的紀錄表取消連結，避免兩份互相改先後攻
+  const A = sideSheet(a, 'away', g), H = sideSheet(h, 'home', g); A.pair = H.id; H.pair = A.id;
+  if (g) A.link.sidesPending = H.link.sidesPending = A.link.resetPending = H.link.resetPending = true;
+  DB.sheets[A.id] = A; DB.sheets[H.id] = H; DB.cur = A.id; undo = []; save(); render(); $('dlg-new').close();
+  toast(`已建立：${A.team}（先攻） vs ${H.team}（後攻）${g ? `，已連結第 ${g.gameNo} 場` : ''}`);
+  if (g) reportSides(A).then(m => m && setTimeout(() => toast(m), 1900));
+};
+/* 回報先後攻＋清除舊分數：建立整場比賽時執行一次（沒網路／未登入就等第一次自動回報時再做）
+   - 這場之前已回報的逐局比分全部清除，改由新紀錄表重新回報
+   - 賽程上的先攻隊和現場不同 → 對調先後攻 */
+const clearFlags = s => { [s, partner(s)].forEach(x => { if (x && x.link) { delete x.link.sidesPending; delete x.link.resetPending; } }); save(); };
+async function reportSides(s) {
+  if (!s.link || !s.teamId || !UPFB || !UP.user || !['admin', 'scorer'].includes(UP.role)) return '';
+  const ref = UPFB.db.collection('tournaments').doc(s.link.tid).collection('games').doc(s.link.gid), g = (await ref.get()).data() || {};
+  if (g.status === 'final') { repErr = '這場已標記結束，先後攻與比分請由管理員調整'; repStatus(); return ''; }
+  const inn = g.innings || {}, had = [...(inn.away || []), ...(inn.home || [])].some(v => v != null && v !== '');
+  const swap = g[s.link.side === 'away' ? 'awayId' : 'homeId'] !== s.teamId, reset = s.link.resetPending && had;
+  if (!swap && !reset) { clearFlags(s); return ''; }
+  const patch = swap ? swapPatch(g) : {};
+  if (reset) Object.assign(patch, { innings: { away: [], home: [] }, awayScore: null, homeScore: null, outsAdj: {}, status: 'scheduled' });
+  patch.updatedAt = UPFB.TS();
+  await ref.update(patch); clearFlags(s);
+  return [swap ? `已回報先後攻：${s.side === 'away' ? s.team : (partner(s) || {}).team} 先攻` : '', reset ? '已清除這場之前回報的比分' : ''].filter(Boolean).join('；') + '（逐局比分紀錄已同步）';
+}
+const partner = s => s && s.pair ? DB.sheets[s.pair] : null;
+function teamRuns(x) { const ex = x.prExtra || {}; return x.rows.reduce((a, r) => a + (r.R || 0), 0) + Object.values(ex).reduce((a, b) => a + b, 0); }
+function nextHalf(n) {   // 本隊這半局結束：一般紀錄表換到下一局；整場比賽則換對方進攻
+  const s = sh(), p = partner(s);
+  s.inning = n + 1;
+  if (!p) { save(); render(); return `第 ${n} 局結束，換到第 ${s.inning} 局`; }
+  if (s.cur && s.cur.k === 'stat') advance();          // 本隊下一次進攻直接從下一棒開始
+  DB.cur = p.id;   // 攻守各自計局：對方的局數只由對方自己的三出局／換局推進，不跟著本隊改
+  if (p.cur && p.cur.k === 'stat') advance();
+  save(); render(); setTimeout(() => endCheckAfterHalf(n, s.side), 400);   // 打完 7 局、滿 45 分鐘不開新局 → 請紀錄員確認比賽結束
+  return `換 ${p.team}（${p.side === 'away' ? '先攻' : '後攻'}）進攻：第 ${p.inning} 局${p.side === 'away' ? '上' : '下'}`;
+}
+function renderGameBar() {
+  const s = sh(), p = partner(s), bar = $('gamebar');
+  if (!p) { bar.hidden = true; return; }
+  const A = s.side === 'away' ? s : p, H = s.side === 'away' ? p : s;
+  bar.hidden = false;
+  bar.innerHTML = `<button type="button" data-go="${A.id}" class="${s === A ? 'on' : ''}"><span title="${esc(A.team || '')}"><small>先攻</small>${esc(nickOf(A.team))}</span><b>${teamRuns(A)}</b></button>
+    <span class="half">${myTurn(A) ? '▲ ' : '▼ '}${halfTxt(myTurn(A) ? A : H)}</span>
+    <button type="button" data-go="${H.id}" class="${s === H ? 'on' : ''}"><b>${teamRuns(H)}</b><span title="${esc(H.team || '')}">${esc(nickOf(H.team))}<small style="margin:0 0 0 4px">後攻</small></span></button>`;
+}
+$('gamebar').onclick = e => { const b = e.target.closest('[data-go]'); if (!b || b.dataset.go === DB.cur) return; DB.cur = b.dataset.go; save(); render(); toast(`切換到 ${sh().team}（${sh().side === 'away' ? '先攻' : '後攻'}）`); };
+
+/* ---------- 換局 ---------- */
+/* 出局數：F、G、K、FS、GS、RE、FC 各 1，DP 2；可點圓點修正（例如野選沒有人出局） */
+const OUTV = { F: 1, G: 1, K: 1, FS: 1, GS: 1, RE: 1, FC: 1, DP: 2 };
+function outsIn(s, inn) { let n = (s.outAdj && s.outAdj[inn]) || 0; s.rows.forEach(r => r.res.forEach((v, k) => { if (v && (r.inn[k] || 0) === inn) n += OUTV[v] || 0; })); return Math.max(0, n); }
+function autoInning() { const s = sh(), n = s.inning || 1; toast(`三人出局！${nextHalf(n)}`); }
+$('outs').onclick = e => { const d = e.target.closest('[data-o]'); if (!d) return; const s = sh(), inn = s.inning || 1, cur = Math.min(3, outsIn(s, inn)), want = +d.dataset.o === cur ? cur - 1 : +d.dataset.o;
+  snap(); s.outAdj = s.outAdj || {}; s.outAdj[inn] = ((s.outAdj[inn] || 0) + want - cur); save(); render();
+  if (want >= 3) autoInning(); else toast(`第 ${inn} 局改為 ${want} 出局`); };
+$('inn-up').onclick = () => { const s = sh(); if (!turnCheck()) return; snap(); toast(nextHalf(s.inning || 1)); };
+$('inn-dn').onclick = () => { const s = sh(); if ((s.inning || 1) <= 1) return; snap(); s.inning--; save(); render(); toast(`改回第 ${s.inning} 局`); };
+function lineRuns(s) {   // 本隊逐局得分：依「打回來的那個打席」所在局數計
+  const byId = {}; s.rows.forEach(r => byId[r.id] = r);
+  const out = [];
+  s.rows.forEach(r => (r.sc || []).forEach(v => { if (!v) return; const [bid, bk] = v.split(':'), b = byId[bid]; const n = (b && b.inn && b.inn[+bk]) || 1; while (out.length < n) out.push(0); out[n - 1]++; }));
+  let top = out.length; s.rows.forEach(r => r.res.forEach((v, k) => { if (v) top = Math.max(top, r.inn[k] || 1); })); while (out.length < top) out.push(0);   // 只算到有打席的那一局
+  return s.rows.some(r => r.res.some(Boolean)) ? out : [];
+}
+
+/* ---------- 上傳：整理成後台匯入用的資料 ---------- */
+function buildPayload(s) {
+  s = s || sh();
+  const byId = {}; s.rows.forEach(r => byId[r.id] = r);
+  const n = (() => { let m = 0; s.rows.forEach(r => { if (!r.sub && (r.no || r.res.some(Boolean))) m = Math.max(m, r.slot); }); return Math.max(10, m); })();
+  const at = (sl, k) => { let idx = -1; s.rows.forEach((r, i) => { if (r.slot === sl && (r.from || 0) <= k) idx = i; }); return idx; };
+  const pas = [];
+  for (let k = 0; k < PA; k++) for (let sl = 1; sl <= n; sl++) {
+    const i = at(sl, k); if (i < 0) continue; const r = s.rows[i]; if (!r.res[k]) continue;
+    const key = r.id + ':' + k, scorers = [];
+    s.rows.forEach(x => x.sc.forEach((v, j) => { if (v === key) scorers.push(x.pr[j] ? x.pr[j].no : x.no); }));
+    pas.push({ slot: r.slot, sub: r.sub || 0, no: r.no, pid: r.pid || '', round: k + 1, inn: r.inn[k] || 1, zone: r.loc[k] && r.loc[k] !== '—' ? r.loc[k] : '', res: r.res[k], rbi: r.rbi[k] || 0, pr: r.pr[k] || null, scorers });
+  }
+  return { v: 1, head: { team: s.team, field: s.field, weather: s.weather, wind: s.wind, date: s.date, time: s.time }, innings: lineRuns(s), lineup: s.rows.filter(r => r.no).map(r => ({ slot: r.slot, sub: r.sub || 0, no: r.no, from: r.from || 0, pid: r.pid || '', name: r.name || '' })), teamId: s.teamId || '', pas };
+}
+function sigOf(s) { const t = JSON.stringify(buildPayload(s)); let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; }
+
+/* ---------- 上傳（Firebase） ---------- */
+const UPFB = (() => {
+  try {
+    const cfg = window.FIREBASE_CONFIG || {};
+    if (!window.firebase || !cfg.apiKey) return null;
+    if (!(firebase.apps && firebase.apps.length)) firebase.initializeApp(cfg);
+    return { db: firebase.firestore(), auth: firebase.auth(), TS: () => firebase.firestore.FieldValue.serverTimestamp() };
+  } catch (_) { return null; }
+})();
+let UP = { user: null, role: '', tid: '', games: [], teams: {}, players: [], gid: '', side: '' };
+if (UPFB) UPFB.auth.onAuthStateChanged(async u => { UP.user = u; UP.role = ''; if (u) { try { const d = await UPFB.db.collection('users').doc(u.uid).get(); UP.role = d.exists ? (d.data().role || '') : 'pending'; UP.name = d.exists ? (d.data().name || u.email) : u.email; } catch (_) { UP.role = '?'; } } if ($('dlg-up').open) upRender(); });
+const upMsg = (m, err) => { const el = $('up-msg'); if (el) { el.className = 'msg' + (err ? ' err' : ''); el.innerHTML = m; } };
+async function upLoadTour() {
+  const ts = (await UPFB.db.collection('tournaments').get()).docs;
+  UP.tours = ts.map(d => ({ id: d.id, name: d.data().name || d.id, archived: !!d.data().archived })); if (!UP.tid && UP.tours.length) UP.tid = (sh().link && sh().link.tid) || (sh().upload && sh().upload.tid) || (UP.tours.filter(t => !t.archived).pop() || UP.tours[UP.tours.length - 1]).id;
+  const T = UPFB.db.collection('tournaments').doc(UP.tid);
+  const [gs, tm, ps] = await Promise.all([T.collection('games').get(), T.collection('teams').get(), T.collection('players').get()]);
+  UP.teams = {}; tm.docs.forEach(d => UP.teams[d.id] = d.data().name || d.id);
+  UP.players = ps.docs.map(d => Object.assign({ id: d.id }, d.data()));
+  UP.games = gs.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => (+a.gameNo || 0) - (+b.gameNo || 0));
+  if (!UP.gid) { const tn = (sh().team || '').replace(/\s/g, ''); const up = sh().upload; UP.gid = up && up.gid ? up.gid : ''; if (!UP.gid && tn) { const g = UP.games.find(g => g.status !== 'final' && [g.awayId, g.homeId].some(t => (UP.teams[t] || '').replace(/\s/g, '').includes(tn) || tn.includes((UP.teams[t] || '').replace(/\s/g, '').replace(/.*（|）/g, '')))); if (g) UP.gid = g.id; } }
+}
+function guessSide(g) { const tn = (sh().team || '').replace(/\s/g, ''); if (!tn || !g) return ''; for (const sd of ['away', 'home']) { const nm = (UP.teams[g[sd + 'Id']] || '').replace(/\s/g, ''); if (nm.includes(tn) || tn.includes(nm.replace(/.*（|）/g, ''))) return sd; } return ''; }
+async function upRender() {
+  const b = $('up-body'); $('up-ok').hidden = true;
+  if (!UPFB) { b.innerHTML = '<p class="msg err">這台裝置沒有連上系統（離線或沒有載入 Firebase）。紀錄都還在這台平板上，有網路後再按「上傳」。也可以先按「備份」存成檔案交給管理員。</p>'; return; }
+  if (!UP.user) {
+    b.innerHTML = `<p class="msg">請用紀錄員帳號登入（註冊頁申請、管理員開通的那組帳號）。還沒有帳號？<a href="signup.html" target="_blank" rel="noopener">前往紀錄員註冊頁</a></p>
+      <label>Email<input id="up-em" type="email" autocomplete="username"></label><label>密碼<input id="up-pw" type="password" autocomplete="current-password"></label>
+      <div class="msg" id="up-msg"></div><button class="btn pri" id="up-login" type="button">登入</button>`;
+    $('up-login').onclick = async () => { try { upMsg('登入中…'); await UPFB.auth.signInWithEmailAndPassword($('up-em').value.trim(), $('up-pw').value); } catch (e) { upMsg('登入失敗：請確認 Email 與密碼', true); } };
+    return;
+  }
+  if (!['admin', 'scorer'].includes(UP.role)) { b.innerHTML = `<p class="msg err">${UP.role === 'pending' ? '你的帳號還在「待開通」，請管理員到後台「紀錄員」分頁開通後再上傳。' : '正在確認帳號權限…'}</p>`; return; }
+  b.innerHTML = '<p class="msg">讀取賽程中…</p>';
+  try { if (!UP.games.length) await upLoadTour(); } catch (e) { b.innerHTML = '<p class="msg err">讀取賽程失敗，請確認網路後再試一次。</p>'; return; }
+  const g = UP.games.find(x => x.id === UP.gid);
+  if (g && !UP.side) UP.side = guessSide(g) || '';
+  const P = buildPayload(), tId = g && UP.side ? g[UP.side + 'Id'] : '';
+  const roster = UP.players.filter(p => p.teamId === tId), nos = [...new Set(P.lineup.map(x => x.no))];
+  const miss = tId ? nos.filter(no => !roster.some(p => String(p.no) === String(no))) : [];
+  const STS = { scheduled: '未開賽', live: '比賽中', final: '已結束' };
+  b.innerHTML = `<p class="msg">登入：${esc(UP.name || UP.user.email)}（${UP.role === 'admin' ? '管理員' : '紀錄員'}）　<a href="#" id="up-out">登出</a></p>
+    <label>賽事<select id="up-tid">${(UP.tours || []).map(t => `<option value="${t.id}"${t.id === UP.tid ? ' selected' : ''}>${esc(t.name)}${t.archived ? '（已封存）' : ''}</option>`).join('')}</select></label>
+    <label>場次<select id="up-gid"><option value="">— 選這張紀錄表是哪一場 —</option>${UP.games.map(x => `<option value="${x.id}"${x.id === UP.gid ? ' selected' : ''}>第 ${esc(x.gameNo || '')} 場｜${esc(UP.teams[x.awayId] || '')}（先攻） vs ${esc(UP.teams[x.homeId] || '')}（後攻）｜${STS[x.status || 'scheduled']}</option>`).join('')}</select></label>
+    ${g ? `<label>本隊<select id="up-side"><option value="">— 這張是哪一隊的打擊紀錄 —</option><option value="away"${UP.side === 'away' ? ' selected' : ''}>先攻：${esc(UP.teams[g.awayId] || '')}</option><option value="home"${UP.side === 'home' ? ' selected' : ''}>後攻：${esc(UP.teams[g.homeId] || '')}</option></select></label>` : ''}
+    <table><tr><th>打席數</th><td>${P.pas.length}</td><th>局數</th><td>${P.innings.length}</td><th>本隊得分</th><td>${P.innings.reduce((a, b) => a + b, 0)}</td></tr>
+    <tr><th>逐局</th><td colspan="5">${P.innings.map((v, i) => `${i + 1}局 ${v}`).join('｜') || '—'}</td></tr>
+    ${tId ? `<tr><th>名單對照</th><td colspan="5">${miss.length ? `<span class="err">背號 ${miss.map(esc).join('、')} 不在 ${esc(UP.teams[tId])} 名單上</span>，管理員匯入時可再手動對應` : `${nos.length} 個背號都對得到名單 ✓`}</td></tr>` : ''}</table>
+    ${partner(sh()) ? `<div class="msg"><b>整場比賽：會一起上傳先攻、後攻兩隊的紀錄表（另一隊：${esc(partner(sh()).team || '')}）。</b></div>` : ''}
+    <div class="msg" id="up-msg">上傳後由管理員在後台「待匯入」確認匯入；之後修改紀錄表可以再上傳一次，管理員會看到最新的一份。</div>`;
+  $('up-out').onclick = e => { e.preventDefault(); UPFB.auth.signOut(); };
+  $('up-tid').onchange = async e => { UP.tid = e.target.value; UP.games = []; UP.gid = ''; UP.side = ''; await upLoadTour(); upRender(); };
+  $('up-gid').onchange = e => { UP.gid = e.target.value; UP.side = ''; upRender(); };
+  if ($('up-side')) $('up-side').onchange = e => { UP.side = e.target.value; upRender(); };
+  $('up-ok').hidden = !(g && UP.side && (UPMODE === 'link' || P.pas.length));
+  $('up-ok').textContent = UPMODE === 'link' ? '連結本場並自動回報比分' : '上傳';
+  if (UPMODE === 'link' && sh().link && sh().link.gid === UP.gid) { const L = sh().link, q = `?t=${encodeURIComponent(L.tid)}&g=${encodeURIComponent(L.gid)}`;
+    $('up-body').insertAdjacentHTML('afterbegin', `<div class="qlinks"><b>開啟第 ${esc(L.gameNo)} 場：</b><a href="score.html${q}">逐局比分紀錄</a><a href="index.html?t=${encodeURIComponent(L.tid)}&g=${encodeURIComponent(L.gid)}">後台資訊中控</a><a href="admin.html${q}">賽務管理後台</a><a href="standings.html${q}">預賽排名看板</a></div>`); }
+  if (UPMODE === 'link') upMsg('連結後，每局三人出局（或按「換局」）時，自動把本隊這半局得分寫到「逐局比分紀錄」；沒網路時先存著，有網路再補送。賽後仍要按「上傳」交給管理員匯入打席資料。');
+}
+let UPMODE = 'upload';
+function openUp(mode) { const L = sh().link || {}; UPMODE = mode; UP.games = []; UP.tid = L.tid || UP.tid; UP.gid = L.gid || ''; UP.side = L.side || sh().side || ''; $('up-title').textContent = mode === 'link' ? '連結本場比賽' : '上傳到管理後台'; $('dlg-up').showModal(); upRender(); }
+$('upbtn').onclick = () => { if (!ready()) { render(); return; } openUp('upload'); };
+$('linkbtn').onclick = () => openUp('link');
+$('up-close').onclick = () => $('dlg-up').close();
+$('up-ok').onclick = async () => {
+  const g = UP.games.find(x => x.id === UP.gid); if (!g || !UP.side) return;
+  if (UPMODE === 'link' || !sh().link) { const s = sh(), same = s.link && s.link.gid === g.id && s.link.side === UP.side;
+    s.link = { tid: UP.tid, gid: g.id, side: UP.side, gameNo: String(g.gameNo || ''), team: UP.teams[g[UP.side + 'Id']] || '' }; if (!same) s.reported = {};
+    const p = partner(s); if (p) { const os = UP.side === 'away' ? 'home' : 'away'; p.link = { tid: UP.tid, gid: g.id, side: os, gameNo: String(g.gameNo || ''), team: UP.teams[g[os + 'Id']] || '' }; if (!same) p.reported = {}; }
+    save(); render(); }
+  if (UPMODE === 'link') { $('dlg-up').close(); toast(`已連結第 ${g.gameNo} 場（${UP.side === 'away' ? '先攻' : '後攻'}），每局結束會自動回報比分`); reportScores(); return; }
+  if ((UP.tours || []).some(t => t.id === UP.tid && t.archived)) { upMsg('這一屆賽事已封存，不能再上傳；需要更正請聯絡管理員解除封存', true); return; }
+  await pushPending();
+  const s = sh(), btn = $('up-ok'); btn.disabled = true; upMsg('上傳中…');
+  const os = UP.side === 'away' ? 'home' : 'away', p = partner(s), jobs = [[s, UP.side]];
+  if (p && p.rows.some(r => r.res.some(Boolean))) jobs.push([p, os]);   // 整場比賽：雙方一起上傳
+  try {
+    const done = [];
+    for (const [x, side] of jobs) {
+      const P = buildPayload(x), ref = UPFB.db.collection('tournaments').doc(UP.tid).collection('uploads').doc();
+      await ref.set({ gameId: g.id, gameNo: String(g.gameNo || ''), teamId: g[side + 'Id'], side, sheetId: x.id, team: x.team || '', date: x.date || '', paCount: P.pas.length,
+        runs: P.innings.reduce((a, b) => a + b, 0), payload: JSON.stringify(P), status: 'pending', createdBy: UP.user.uid, createdByName: UP.name || UP.user.email || '', createdAt: UPFB.TS(), at: Date.now() });
+      x.upload = { id: ref.id, tid: UP.tid, gid: g.id, side, at: Date.now(), sig: 0 }; x.upload.sig = sigOf(x);
+      done.push(`${UP.teams[g[side + 'Id']] || x.team}（${side === 'away' ? '先攻' : '後攻'}）`);
+    }
+    save(); render();
+    $('dlg-up').close(); toast(`已上傳第 ${g.gameNo} 場：${done.join('、')}，等管理員匯入`);
+  } catch (e) { upMsg('上傳失敗：' + (e && e.code === 'permission-denied' ? '沒有權限（帳號需為紀錄員）' : '請確認網路後再試一次'), true); }
+  btn.disabled = false;
+};
+
+
+/* ---------- 自動回報比分到「逐局比分紀錄」 ----------
+   連結本場後，已結束的局（目前局數之前）只要得分跟上次回報的不同，就寫到比賽的逐局比分；沒網路或未登入時先記著，之後自動補送 */
+let repTimer = null, repBusy = false, repErr = '';
+function scheduleReport() { clearTimeout(repTimer); repTimer = setTimeout(reportScores, 800); }
+function repTodo(s) { const runs = lineRuns(s), done = endedOf(s) ? Math.max((s.inning || 1) - 1, runs.length) : (s.inning || 1) - 1, out = []; s.reported = s.reported || {};
+  for (let i = 1; i <= done; i++) { const v = runs[i - 1] || 0; if (s.reported[i] !== v) out.push([i, v]); } return out; }
+function repStatus() {
+  const s = sh(), b = $('linkbtn'); if (!b) return;
+  if (!s.link) { b.className = 'btn'; b.textContent = '🔗 連結本場'; return; }
+  const n = repTodo(s).length + (partner(s) && partner(s).link ? repTodo(partner(s)).length : 0), who = `第${s.link.gameNo}場`, full = `第${s.link.gameNo}場 ${s.link.team || ''}（${s.link.side === 'away' ? '先攻' : '後攻'}）`;
+  if (!n) { b.className = 'btn ok'; b.textContent = `🔗 ${who} ✓`; b.title = `已連結${full}，比分已同步到逐局比分紀錄`; return; }
+  b.className = 'btn wait'; b.textContent = `🔗 ${who} ⏳${n}局`;
+  b.title = full + '：' + (repErr || (!UPFB ? '沒有網路，連線後自動補送' : !UP.user ? '尚未登入紀錄員帳號：點這裡登入後自動補送' : '回報中…'));
+}
+async function reportScores() { const s = sh(), p = partner(s); await reportLive(s); if (p) await reportLive(p); await reportOne(s); if (p) await reportOne(p); if (endedOf(s) && !endedOf(s).sent) await reportEnd(); }
+/* 即時打序：把本隊目前打序、下一棒與本場每個打席（局、落點、結果）寫到該場，供後台資訊中控「比賽中・防守準備」查詢 */
+function liveOf(s) {
+  const keep = DB.cur; DB.cur = s.id; let d = null; try { d = due(); } catch (_) {} DB.cur = keep;
+  const order = s.rows.filter(r => r.no || r.res.some(Boolean)).map(r => ({ slot: r.slot, sub: r.sub ? 1 : 0, from: r.from || 0, no: r.no || '', pid: r.pid || '', name: r.name || '',
+    pa: r.res.map((v, k) => v ? { k, res: v, zone: r.loc[k] && r.loc[k] !== '—' ? r.loc[k] : '', inn: r.inn[k] || 0 } : null).filter(Boolean) }));
+  return { inning: s.inning || 1, next: d ? s.rows[d.r].slot : 0, round: d ? d.c + 1 : 0, order };
+}
+async function reportLive(s) {
+  if (!s || !s.link || !s.link.side || !UPFB || !UP.user || !['admin', 'scorer'].includes(UP.role) || (s.link.sidesPending || s.link.resetPending)) return;
+  const L = liveOf(s), sig = JSON.stringify(L); if (sig === s.liveSig) return;
+  try { await UPFB.db.collection('tournaments').doc(s.link.tid).collection('games').doc(s.link.gid).update({ ['live.' + s.link.side]: Object.assign(L, { at: Date.now() }), updatedAt: UPFB.TS() }); s.liveSig = sig; try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (_) {} } catch (_) {}
+}
+async function reportOne(s) {
+  repStatus();
+  if (!s.link || repBusy || !UPFB || !UP.user || !['admin', 'scorer'].includes(UP.role)) return;
+  const todo = repTodo(s); if (!todo.length) return;
+  repBusy = true;
+  try {
+    const ref = UPFB.db.collection('tournaments').doc(s.link.tid).collection('games').doc(s.link.gid), g = (await ref.get()).data() || {};
+    if (g.status === 'final') { repErr = '這場已標記結束，比分請改由管理員匯入或在逐局比分紀錄重新開啟'; repBusy = false; repStatus(); return; }
+    if (s.link.sidesPending || s.link.resetPending) {   // 先後攻／清除舊分數還沒回報成功 → 先做
+      const m = await reportSides(s); repBusy = false; repStatus();
+      if (m) toast(m);
+      if (!s.link.sidesPending && !s.link.resetPending) setTimeout(reportScores, 800);
+      return;
+    }
+    if (s.teamId && g[s.link.side + 'Id'] && g[s.link.side + 'Id'] !== s.teamId) {
+      { repErr = '逐局比分紀錄上這場的先後攻和本紀錄表相反（可能被改過），請按「＋ 新紀錄表」重新選這場與先攻隊'; repBusy = false; repStatus(); return; }
+    }
+    const inn = Object.assign({ away: [], home: [] }, g.innings || {}), arr = (inn[s.link.side] || []).slice();
+    todo.forEach(([i, v]) => { while (arr.length < i) arr.push(null); arr[i - 1] = v; }); inn[s.link.side] = arr;
+    const patch = { innings: inn, [s.link.side + 'Score']: arr.reduce((a, b) => a + (+b || 0), 0), updatedAt: UPFB.TS() };
+    if ((g.status || 'scheduled') === 'scheduled') patch.status = 'live';
+    await ref.update(patch);
+    todo.forEach(([i, v]) => s.reported[i] = v); repErr = '';
+    try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (_) {}
+    toast(`已回報 ${todo.map(([i, v]) => `第 ${i} 局 ${v} 分`).join('、')} 到逐局比分紀錄`);
+  } catch (e) { repErr = e && e.code === 'permission-denied' ? '沒有權限回報比分（帳號需為紀錄員）' : '回報失敗，稍後自動重試'; }
+  repBusy = false; repStatus();
+}
+setInterval(reportScores, 30000); addEventListener('online', reportScores);
+if (UPFB) UPFB.auth.onAuthStateChanged(() => setTimeout(reportScores, 1500));
+
+/* ---------- 得分／打點：每個打席各自記，整場累計 ---------- */
+function seqPA() { const out = [], n = lineupN(); for (let k = 0; k < PA; k++) for (let sl = 1; sl <= n; sl++) { const i = rowAt(sl, k); if (i >= 0 && sh().rows[i].res[k]) out.push({ r: i, c: k }); } return out; }
+function lastOnBase(row) { for (let k = PA - 1; k >= 0; k--) if (ONBASE.has(row.res[k])) return k; return -1; }
+function rowById(id) { return sh().rows.find(x => x.id === id); }
+function unlinkPA(row, k) {   // 清除某打席時，把它打回來的得分也一起取消
+  const key = row.id + ':' + k;
+  sh().rows.forEach(x => x.sc.forEach((v, j) => { if (v === key) x.sc[j] = ''; }));
+  if (row.sc[k]) { const [bid, bk] = row.sc[k].split(':'), b = rowById(bid); if (b && b !== row) b.rbi[+bk] = Math.max(0, b.rbi[+bk] - 1); row.sc[k] = ''; }
+  row.rbi[k] = 0;
+}
+function toggleRun(ri, rk) {  // 跑者 ri 的第 rk 打席回本壘：記在目前這個打席（打點＋1）；再點一次取消
+  const c = cur(), bat = sh().rows[c.r], key = bat.id + ':' + c.c, run = sh().rows[ri]; snap();
+  if (ri === c.r && bat.res[c.c] === 'HR') { toast('全壘打的打者一定得分，不能取消（打點有誤請用下方 − ＋ 調整）'); return; }
+  if (run.sc[rk] === key) { run.sc[rk] = ''; bat.rbi[c.c] = Math.max(0, bat.rbi[c.c] - 1); toast(`取消：第 ${run.ord} 棒${run.no ? ' #' + run.no : ''} 回本壘`); }
+  else {
+    if (run.sc[rk]) { const [bid, bk] = run.sc[rk].split(':'), b = rowById(bid); if (b) b.rbi[+bk] = Math.max(0, b.rbi[+bk] - 1); }
+    run.sc[rk] = key; bat.rbi[c.c] = (bat.rbi[c.c] || 0) + 1;
+    toast(ri === c.r ? `第 ${bat.ord} 棒 打者本人回本壘：得分＋1、打點＋1` : `第 ${run.ord} 棒${run.no ? ' #' + run.no : ''} 得分＋1；第 ${bat.ord} 棒 打點＋1`);
+  }
+  save(); render();
+}
+function renderStat() {
+  const p = $('statp'), c = cur(), bat = sh().rows[c.r];
+  if (!bat || !bat.res[c.c] || c.k === 'loc') { p.classList.remove('on'); return; }
+  const key = bat.id + ':' + c.c, seq = seqPA(), at = seq.findIndex(x => x.r === c.r && x.c === c.c);
+  const cand = [];
+  for (let j = at - 1; j >= 0 && j >= at - 12 && cand.length < 4; j--) { const x = seq[j], r = sh().rows[x.r]; if ((r.inn[x.c] || 1) !== (bat.inn[c.c] || 1)) break; if (ONBASE.has(r.res[x.c]) && r.res[x.c] !== 'HR' && (!r.sc[x.c] || r.sc[x.c] === key) && !cand.some(y => y.r === x.r)) cand.push(x); }   // 只列同一局的跑者
+  sh().rows.forEach((r, i) => r.sc.forEach((v, k) => { if (v === key && i !== c.r && !cand.some(y => y.r === i && y.c === k)) cand.push({ r: i, c: k }); }));
+  const chip = (x, self) => { const r = sh().rows[x.r]; return `<button type="button" class="chip${r.sc[x.c] === key ? ' sel' : ''}" data-run="${x.r}:${x.c}">${self ? (r.res[x.c] === 'HR' ? '✓ 打者本人（全壘打必得分）' : '打者本人') : '第 ' + (r.slot || r.ord) + ' 棒' + (r.sub ? '（替）' : '')}${r.no ? ' #' + r.no : ''}<small>${self ? '' : r.res[x.c] + '・第' + '一二三四'[x.c] + '輪' + (r.pr[x.c] ? '・PR #' + r.pr[x.c].no : '')}</small></button>`; };
+  p.innerHTML = `<div class="t">第 ${bat.ord} 棒${bat.no ? ' #' + bat.no : ''} ${bat.res[c.c]}：有人回本壘嗎？<small>點回本壘的球員（可複選）；沒有就直接記下一棒</small></div>
+    <div class="rw"><b>回本壘</b>${cand.reverse().map(x => chip(x)).join('')}${chip({ r: c.r, c: c.c }, true)}<small style="color:var(--muted)">不在名單？點表格該球員的「得分」格</small></div>
+    <div class="rw"><b>本打席打點</b><span class="stepper"><button type="button" data-rbi="-1">−</button><b>${bat.rbi[c.c] || 0}</b><button type="button" data-rbi="1">＋</button></span><small style="color:var(--muted)">點回本壘的人會自動＋1；失誤、雙殺回來不算打點就按 −</small></div>`;
+  p.classList.add('on');
+}
+$('statp').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.run) { const [r, k] = b.dataset.run.split(':').map(Number); toggleRun(r, k); }
+  else if (b.dataset.rbi) { const c = cur(), bat = sh().rows[c.r]; snap(); bat.rbi[c.c] = Math.max(0, (bat.rbi[c.c] || 0) + +b.dataset.rbi); save(); render(); }
+});
+
+function swapRunner(row, k, no) {   // 換人代跑（第四版）：在該棒下方新增替補列，從下一輪起由他打擊
+  const s = sh(), slot = row.slot, at = activeIdx(slot), nsub = s.rows.filter(r => r.slot === slot).length;
+  { const m = lineupConflict(slot, no, '', null); if (m) { $('pr-info').innerHTML = `<b style="color:#b42318">${esc(m)}</b>`; return false; } }
+  const nr = prep(mkRow(slot, nsub, no, Math.min(k + 1, PA))); nr.locNote = `PR換 #${row.no || "?"}`;
+  s.rows.splice(at + 1, 0, nr); if (s.cur.r > at) s.cur.r++; setTimeout(() => matchRow(s.rows.indexOf(nr), true), 50);
+  return true;
+}
+/* ---------- 代跑 ---------- */
+let prSel = null, prType = 0;
+function prCands() {   // 最近上壘、還沒回本壘的跑者（含目前這一棒）
+  const c = cur(), seq = seqPA(); let at = seq.findIndex(x => x.r === c.r && x.c === c.c); if (at < 0) at = seq.length - 1;
+  const out = [];
+  for (let j = at; j >= 0 && j >= at - 12 && out.length < 4; j--) { const x = seq[j], r = sh().rows[x.r]; if ((r.inn[x.c] || 1) !== (sh().inning || 1)) break; if (ONBASE.has(r.res[x.c]) && r.res[x.c] !== 'HR' && !r.sc[x.c] && !out.some(y => y.r === x.r)) out.push(x); }
+  return out.reverse();
+}
+function renderPR() {
+  const cs = prCands();
+  $('pr-runners').innerHTML = cs.length ? cs.map(x => { const r = sh().rows[x.r]; return `<button type="button" data-x="${x.r}:${x.c}"${prSel && prSel.r === x.r && prSel.c === x.c ? ' class="sel"' : ''}><b>第 ${r.slot || r.ord} 棒</b><small>${r.no ? '#' + r.no + '・' : ''}${r.res[x.c]}・第${'一二三四'[x.c]}輪${r.pr[x.c] ? '・已代跑 #' + r.pr[x.c].no : ''}</small></button>`; }).join('') : '<small style="grid-column:1/-1;color:var(--muted)">目前沒有壘上跑者（最近上壘且還沒回本壘的人）</small>';
+  $('pr-type').querySelectorAll('[data-t]').forEach(b => b.classList.toggle('sel', +b.dataset.t === prType));
+  const r = prSel && sh().rows[prSel.r];
+  $('pr-info').innerHTML = !r ? '請先選壘上跑者' : prType ? `第 ${r.slot || r.ord} 棒 #${r.no || '?'} 退場；代跑者這次跑回來的得分算他的，第${'一二三四'[Math.min(prSel.c + 1, 3)]}輪起由他打擊` : `只代跑這一次：跑回來的得分算代跑者，第 ${r.slot || r.ord} 棒 #${r.no || '?'} 下一輪照常打擊`;
+  $('pr-clear').style.visibility = r && r.pr[prSel.c] ? 'visible' : 'hidden';
+}
+function openPR() {
+  const cs = prCands(); prSel = cs.length ? cs[cs.length - 1] : null; prType = 0;
+  const r = prSel && sh().rows[prSel.r]; $('pr-no').value = r && r.pr[prSel.c] ? r.pr[prSel.c].no : '';
+  renderPR(); $('dlg-pr').showModal(); setTimeout(() => $('pr-no').focus(), 50);
+}
+$('pr-runners').onclick = e => { const b = e.target.closest('[data-x]'); if (!b) return; const [r, c] = b.dataset.x.split(':').map(Number); prSel = { r, c }; renderPR(); };
+$('pr-type').onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; prType = +b.dataset.t; renderPR(); };
+$('pr-cancel').onclick = () => $('dlg-pr').close();
+$('pr-no').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('pr-ok').click(); } };
+$('pr-clear').onclick = () => { if (!prSel) return; const r = sh().rows[prSel.r]; snap(); r.pr[prSel.c] = null; save(); render(); $('dlg-pr').close(); toast('已取消代跑（換人代跑新增的列請用「復原」移除）'); };
+$('pr-ok').onclick = () => {
+  const no = $('pr-no').value.trim();
+  if (!prSel) { $('pr-info').innerHTML = '<b style="color:#b42318">請先選壘上跑者</b>'; return; }
+  if (!no) { $('pr-info').innerHTML = '<b style="color:#b42318">請輸入代跑背號</b>'; $('pr-no').focus(); return; }
+  const row = sh().rows[prSel.r], k = prSel.c; snap();
+  if (prType && !swapRunner(row, k, no)) { undo.pop(); return; }   // 衝突訊息已顯示在對話框
+  row.pr[k] = { no, swap: !!prType };
+  save(); render(); $('dlg-pr').close();
+  toast(`${prType ? '換人代跑' : '臨時代跑'}：#${no} 代第 ${row.slot || row.ord} 棒 #${row.no || '?'} 跑壘${prType ? '，之後由 #' + no + ' 接這一棒' : ''}`);
+};
+
+/* 表格操作 */
+$('sheet').addEventListener('click', e => {
+  const nmc = e.target.closest('td.nm'); if (nmc) { const i = +nmc.dataset.nm; if (sh().rows[i].no) openPL(i); else toast('先填背號'); return; }
+  const td = e.target.closest('td.c'); if (td) { pick(+td.dataset.r, +td.dataset.c, td.dataset.k); return; }
+  const nm = e.target.closest('td.num'); if (!nm) return;
+  const i = +nm.dataset.n, R = sh().rows[i];
+  if (sh().rows[cur().r].res[cur().c] && nm.dataset.f === 'R') { const k = lastOnBase(R); if (k >= 0) { toggleRun(i, k); return; } }
+  toast(`第 ${R.ord} 棒：全場得分 ${R.R}、打點 ${R.RBI}（每個打席的得分●、打點數字標在結果格裡）`);
+});
+$('sheet').addEventListener('change', e => {
+  const t = e.target; snap();
+  if (t.dataset.no != null) { const i = +t.dataset.no, r = sh().rows[i], m = lineupConflict(r.slot, t.value.trim(), '', r); if (m) { undo.pop(); toast('請先修正：' + m); t.value = r.no; render(); return; } if (r.no !== t.value.trim()) { r.no = t.value.trim(); r.pid = ''; r.name = ''; save(); matchRow(i, true); } }
+  if (t.dataset.note) { const [i, f] = t.dataset.note.split(':'); sh().rows[+i][f] = t.value; }
+  save(); render();
+});
+$('head').addEventListener('input', e => { const k = e.target.id.replace('h-', ''); sh()[k] = e.target.value; if (k === 'team') matchTeam(); save(); });
+$('head').addEventListener('change', () => setTimeout(render, 0));   // 等焦點移到下一格再重畫，避免點下去的格子被換掉
+const HEAD = ['h-team', 'h-field', 'h-weather', 'h-wind', 'h-date', 'h-time'];
+$('head').addEventListener('keydown', e => { if (e.key !== 'Enter') return; e.preventDefault(); const i = HEAD.indexOf(e.target.id);
+  if (i < HEAD.length - 1) $(HEAD[i + 1]).focus(); else { e.target.blur(); const el = document.querySelector('input[data-no="0"]'); if (el) el.focus(); } });
+$('sheet').addEventListener('keydown', e => { const t = e.target; if (e.key !== 'Enter' || t.dataset.no == null) return; e.preventDefault();
+  const i = +t.dataset.no; t.blur(); requestAnimationFrame(() => { if ($('dlg-pl').open) { PL.next = i + 1; return; } const el = document.querySelector(`input[data-no="${i + 1}"]`); if (el && i < 11) el.focus(); else render(); }); });
+
+
+/* ---------- 查此打者：跳出視窗顯示這位打者的落點（歷屆＋本場） ---------- */
+const PQ = { cache: {} };
+const cellC = (() => { const m = {}; RINGS.forEach(R => R.cols.forEach(([code, a0, a1]) => m[code] = [(a0 + a1) / 2, (R.r[0] + R.r[1]) / 2]));
+  FOUL.forEach(([d, L, Rr], i) => { const prev = i ? FOUL[i - 1][0] : 3, mid = Math.min((prev + Math.min(d, 92)) / 2, 84); m[L] = [-52, mid]; m[Rr] = [52, mid]; }); m['2'] = [180, 1]; return m; })();
+function pqPos(b) {   // 格位代號 → 該格中心；只有座標（呎）的舊資料 → 依角度與距離換算
+  const z = String(b.zone || '').toUpperCase();
+  if (z === '2') return [HX, HY + 16];
+  if (z && cellC[z]) return P(cellC[z][0], cellC[z][1]);
+  if (typeof b.x === 'number' && (b.x || b.y) && !b.noLoc) { const d = Math.hypot(b.x, b.y) / 3.2808, a = Math.atan2(b.x, b.y) * 180 / Math.PI; return P(a, Math.min(d, 90)); }
+  return null;
+}
+const PQC = r => ({ HR: '#7c3aed', '1B': '#dc2626', '2B': '#dc2626', '3B': '#dc2626', BB: '#0d9488', E: '#0d9488', FC: '#0d9488' }[r] || '#64748b');
+const SYS2SHEET = b => (b.paper && b.paper.res) || { OUT: b.type === 'G' ? 'G' : 'F', SF: 'FS' }[b.result] || b.result;
+async function pqHist(pid, team) {   // 別屆與本屆其他場：隊名或別名相同的球隊 → 這位球員的打席
+  const key = (RO.tid || '') + '|' + pid; if (PQ.cache[key]) return PQ.cache[key];
+  const out = []; if (!UPFB || !UP.user) return out;
+  try {
+    const T0 = UPFB.db.collection('tournaments').doc(RO.tid), me = (await T0.collection('players').doc(pid).get()).data() || {};
+    const tdoc = (await T0.collection('teams').doc(team).get()).data() || {}, names = new Set([tdoc.name, ...(tdoc.aliases || [])].filter(Boolean));
+    const ts = (await UPFB.db.collection('tournaments').get()).docs;
+    for (const t of ts) {
+      const T = UPFB.db.collection('tournaments').doc(t.id), tm = (await T.collection('teams').get()).docs.filter(d => [d.data().name, ...(d.data().aliases || [])].some(n => names.has(n)));
+      for (const td of tm) {
+        const bs = (await T.collection('balls').where('teamId', '==', td.id).get()).docs.map(d => d.data());
+        bs.forEach(b => { const k = t.id + '/' + b.batterId;
+          const mine = t.id === RO.tid ? b.batterId === pid : (me.histNo || []).includes(k) ? false : (me.hist || []).includes(k) ? true : b.batterName === me.name;
+          if (mine) out.push(Object.assign({ tname: t.data().name || '' }, b)); });
+      }
+    }
+  } catch (e) { /* 沒網路或沒權限：只顯示本場 */ }
+  PQ.cache[key] = out; return out;
+}
+async function openPQ() {
+  const s = sh(), ri = +$('pq').dataset.ri, row = s.rows[ri]; if (!row) return;
+  $('pq-title').textContent = `${row.no ? '#' + row.no + ' ' : ''}${row.name || ''} 落點`;
+  $('pq-sub').textContent = `${s.team || ''}・讀取歷屆資料中…`;
+  $('pq-field').innerHTML = $('field').innerHTML.replace(/<g id="mark">[\s\S]*?<\/g>/, '').replace(/class="cell-z"/g, 'class="cz"'); $('pq-field').setAttribute('viewBox', $('field').getAttribute('viewBox'));
+  $('pq-list').innerHTML = ''; $('pq-stat').innerHTML = ''; $('dlg-pq').showModal();
+  const cur = []; row.res.forEach((r, k) => { if (r) cur.push({ res: r, zone: row.loc[k] || '', inn: row.inn[k] || '', cur: true }); });
+  const hist = (await pqHist(row.pid, s.teamId)).filter(b => !(s.link && b.gameId === s.link.gid)).map(b => ({ res: SYS2SHEET(b), zone: b.zone || '', x: b.x, y: b.y, noLoc: b.noLoc, inn: b.inning || '', tname: b.tname }));
+  const all = hist.concat(cur), H = new Set(['1B', '2B', '3B', 'HR']), AB = r => !['BB', 'FS', 'GS'].includes(r);
+  let dots = '';
+  all.forEach(b => { const p = pqPos(b); if (!p) return; const c = PQC(b.res);
+    dots += b.cur ? `<circle cx="${p[0].toFixed(0)}" cy="${p[1].toFixed(0)}" r="18" style="fill:${c};stroke:#fff;stroke-width:3"/>` : `<circle cx="${(p[0] + (Math.random() - .5) * 16).toFixed(0)}" cy="${(p[1] + (Math.random() - .5) * 12).toFixed(0)}" r="15" style="fill:${c};fill-opacity:.55;stroke:${c};stroke-width:2"/>`; });
+  $('pq-field').insertAdjacentHTML('beforeend', dots);
+  const ab = all.filter(b => AB(b.res)).length, h = all.filter(b => H.has(b.res)).length;
+  const fair = all.map(pqPos).filter(Boolean).map(p => Math.atan2(p[0] - HX, HY - p[1]) * 180 / Math.PI).filter(a => Math.abs(a) <= 45);
+  const L = fair.filter(a => a < -15).length, Cn = fair.filter(a => Math.abs(a) <= 15).length, Rn = fair.filter(a => a > 15).length, pc = n => fair.length ? Math.round(n / fair.length * 100) + '%' : '—';
+  $('pq-sub').textContent = `${s.team || ''}・歷屆 ${hist.length} 席・本場 ${cur.length} 席`;
+  $('pq-stat').innerHTML = `<div><span>打席</span><b>${all.length}</b></div><div><span>打擊率</span><b>${ab ? (h / ab).toFixed(3).replace(/^0/, '') : '—'}</b></div><div><span>左</span><b>${pc(L)}</b></div><div><span>中</span><b>${pc(Cn)}</b></div><div><span>右</span><b>${pc(Rn)}</b></div>`;
+  const chip = b => `<span${b.cur ? ' class="cur"' : ''}><i style="background:${PQC(b.res)}"></i>${b.inn ? b.inn + '局 ' : ''}${esc(b.res)}${b.zone ? '・' + esc(b.zone) : ''}</span>`;
+  const byT = {}; hist.forEach(b => (byT[b.tname || '歷屆'] = byT[b.tname || '歷屆'] || []).push(b));
+  $('pq-list').innerHTML = `<div class="lbl">本場</div>${cur.length ? cur.map(chip).join('') : '<span class="none">尚未打擊</span>'}` + Object.entries(byT).map(([t, bs]) => `<div class="lbl">${esc(String(t).replace(/^(\d{4}).*?(第\s*\d+\s*屆).*$/, '$1 $2'))}（${bs.length} 席）</div>${bs.map(chip).join('')}`).join('') + (hist.length ? '' : `<div class="lbl">歷屆</div><span class="none">${UPFB && UP.user ? '沒有歷屆紀錄' : '未登入或離線：只顯示本場'}</span>`);
+}
+$('pq').addEventListener('click', e => { e.preventDefault(); openPQ(); });
+$('pq-close').onclick = () => $('dlg-pq').close();
+
+$('hint').addEventListener('click', e => { if (e.target.id !== 'go-turn') return; const p = partner(sh()); if (p) { DB.cur = p.id; save(); render(); } });
+
+/* ---------- 比賽計時與比賽結束（依賽事規則：預賽 7 局或 50 分鐘，滿 45 分鐘不開新局；複決賽／排名賽 7 局或 60 分鐘，滿 55 分鐘不開新局） ---------- */
+const CLOCK_PRESETS = { pre: { mins: 50, noNew: 45, label: '預賽：50 分鐘（滿 45 分鐘不開新局）' }, ko: { mins: 60, noNew: 55, label: '複決賽／排名賽：60 分鐘（滿 55 分鐘不開新局）' } };
+const MAX_INN = 7;
+const gameOf = s => { const p = partner(s); return p ? [s.side === 'away' ? s : p, s.side === 'away' ? p : s] : [s, null]; };   // [先攻, 後攻]
+const clockOf = s => s.clock || (partner(s) || {}).clock || null;
+function setClock(c) { const s = sh(), p = partner(s); s.clock = c; if (p) p.clock = c ? Object.assign({}, c) : null; save(); }
+const elapsedMin = c => c ? (Date.now() - c.start) / 60000 : 0;
+const mmss = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+function toastMid(m, ms) { const t = $('toast'); t.textContent = m; t.classList.add('mid', 'on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), ms || 4500); }
+function tickClock() {
+  const s = sh(), c = clockOf(s), b = $('clockbtn'); if (!b) return;
+  const ended = endedOf(s);
+  if (!c) { b.className = 'btn'; b.textContent = '⏱ 開賽計時'; b.title = '開始比賽時間倒數'; return; }
+  const left = c.mins * 60 - (Date.now() - c.start) / 1000, el = elapsedMin(c);
+  if (ended) { b.className = 'btn'; b.textContent = `⏱ 比賽用時 ${mmss(Math.max(0, ((ended.at || Date.now()) - c.start) / 1000))}`; return; }
+  b.className = 'btn clock ' + (left <= 0 ? 'over' : el >= c.noNew ? 'warn' : '');
+  b.textContent = left > 0 ? `⏱ ${mmss(left)}${el >= c.noNew ? ' 不開新局' : ''}` : `⏱ 時間到 +${mmss(-left)}`;
+  b.title = `開賽 ${new Date(c.start).toTimeString().slice(0, 5)}・比賽時間 ${c.mins} 分鐘，滿 ${c.noNew} 分鐘不開新局`;
+  /* 提醒只出現一次 */
+  if (el >= c.noNew && !c.warned) { c.warned = 1; setClock(c); toastMid(`已滿 ${c.noNew} 分鐘：這一局打完後不開新局`); }
+  if (left <= 0 && !c.over) { c.over = 1; setClock(c); toastMid(`比賽時間到（${c.mins} 分鐘）`); checkWalkoff(true); }
+}
+setInterval(tickClock, 1000);
+/* 時間到後，後攻在下半局取得領先 → 立即結束 */
+function checkWalkoff(force) {
+  const s = sh(), [A, H] = gameOf(s), c = clockOf(s); if (!H || endedOf(s) || !c || elapsedMin(c) < c.mins) return;
+  if (myTurn(H) && teamRuns(H) > teamRuns(A) && (force || !H.walkAsked)) { H.walkAsked = 1; save(); openEnd('lead', `時間已到，後攻 ${nickOf(H.team)} 在下半局領先，依規則立即結束比賽`); }
+}
+/* 半局結束時判斷要不要結束比賽 */
+function endCheckAfterHalf(n, side) {
+  const s = sh(), [A, H] = gameOf(s), c = clockOf(s); if (!H || endedOf(s)) return;
+  const ar = teamRuns(A), hr = teamRuns(H);
+  if (side === 'away' && n >= MAX_INN && hr > ar) return openEnd('seven', `第 ${n} 局上半結束，後攻 ${nickOf(H.team)} 領先，下半局不必進行`);
+  if (side === 'home') {
+    if (n >= MAX_INN && ar !== hr) return openEnd('seven', `已打完 ${n} 局`);
+    if (c && elapsedMin(c) >= c.noNew) return openEnd(elapsedMin(c) >= c.mins ? 'time' : 'nonew', `已滿 ${c.noNew} 分鐘，依規則第 ${n} 局結束後不開新局`);
+  }
+}
+const END_REASONS = { seven: '打完 7 局', time: '比賽時間到', nonew: '時間將到，不開新局', lead: '時間到，後攻領先提前結束', ump: '裁判判定結束（棄權、天候等）' };
+const endedOf = s => s.ended || (partner(s) || {}).ended || null;
+function lineTable() {
+  const s = sh(), [A, H] = gameOf(s), la = lineRuns(A), lh = H ? lineRuns(H) : [], n = Math.max(la.length, lh.length, 1);
+  const row = (x, l) => `<tr><th>${esc(nickOf(x.team))}</th>${Array.from({ length: n }, (_, i) => `<td>${l[i] ?? (x === H && i === n - 1 && la.length > lh.length ? 'X' : '')}</td>`).join('')}<td class="tot">${teamRuns(x)}</td></tr>`;
+  return `<table class="endline"><thead><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join('')}<th>合計</th></tr></thead><tbody>${row(A, la)}${H ? row(H, lh) : ''}</tbody></table>`;
+}
+function openEnd(reason, why) {
+  const s = sh(), e = endedOf(s), c = clockOf(s), [A, H] = gameOf(s);
+  $('end-line').innerHTML = lineTable();
+  $('end-why').textContent = why || '';
+  $('end-clock').textContent = c ? `開賽 ${new Date(c.start).toTimeString().slice(0, 5)}・已進行 ${Math.floor(elapsedMin(c))} 分鐘（${c.mins} 分鐘制）` : '未使用比賽計時';
+  if (e) {
+    $('end-state').innerHTML = `<b>比賽已於 ${new Date(e.at).toTimeString().slice(0, 5)} 結束</b>（${esc(END_REASONS[e.reason] || e.reason)}）。${e.sent ? '已通知逐局比分紀錄標記「已結束」。' : '尚未通知逐局比分紀錄（離線或未連結），恢復連線後會自動補送。'}`;
+    $('end-reasons').hidden = true; $('end-ok').hidden = true; $('end-reopen').hidden = false;
+  } else {
+    $('end-state').innerHTML = H ? `確認後兩隊紀錄表都會鎖住不能再記新打席，並把最後比分與「已結束」回報到逐局比分紀錄（由後攻 ${esc(nickOf(H.team))} ${teamRuns(H)}：${teamRuns(A)} 先攻 ${esc(nickOf(A.team))}）。` : '確認後這張紀錄表會鎖住，不能再記新打席。';
+    $('end-reasons').hidden = false; $('end-ok').hidden = false; $('end-reopen').hidden = true;
+    $('end-reasons').querySelectorAll('input').forEach(i => i.checked = i.value === (reason || (s.inning >= MAX_INN ? 'seven' : c && elapsedMin(c) >= c.mins ? 'time' : 'ump')));
+  }
+  if (!$('dlg-end').open) $('dlg-end').showModal();
+}
+$('endbtn').onclick = () => openEnd('', '');
+$('end-cancel').onclick = () => $('dlg-end').close();
+$('end-ok').onclick = async () => {
+  const s = sh(), p = partner(s), r = ($('end-reasons').querySelector('input:checked') || {}).value || 'ump';
+  snap(); const e = { at: Date.now(), reason: r, sent: false };
+  [s, p].forEach(x => { if (x) { if (x.cur && x.cur.k === 'stat') x.cur.k = 'loc'; x.ended = Object.assign({}, e); } });
+  save(); render(); $('dlg-end').close();
+  toast(`比賽結束：${END_REASONS[r]}。記得按「☁ 上傳」把兩隊紀錄表送到管理後台`);
+  reportEnd();
+};
+$('end-reopen').onclick = () => {
+  const s = sh(), p = partner(s), e = endedOf(s);
+  [s, p].forEach(x => { if (x) delete x.ended; }); save(); render(); $('dlg-end').close();
+  toast(e && e.sent ? '已重新開啟紀錄表；逐局比分紀錄上這場已標記結束，需由紀錄員在逐局比分紀錄按「重新開啟」才能再回報' : '已重新開啟，可以繼續記錄');
+};
+/* 比賽結束：先把最後一個半局的比分補回報，再把場次標記為「已結束」 */
+async function reportEnd() {
+  const s = sh(), p = partner(s), e = endedOf(s); if (!e || e.sent || !s.link || !UPFB || !UP.user || !['admin', 'scorer'].includes(UP.role)) { repStatus(); return; }
+  try {
+    await reportOne(s); if (p) await reportOne(p);
+    if (repTodo(s).length || (p && repTodo(p).length)) return;   // 比分還沒送完，下次再試
+    const ref = UPFB.db.collection('tournaments').doc(s.link.tid).collection('games').doc(s.link.gid);
+    await ref.update({ status: 'final', endReason: END_REASONS[e.reason] || e.reason, updatedAt: UPFB.TS() });
+    [s, p].forEach(x => { if (x && x.ended) x.ended.sent = true; }); try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (_) {}
+    toast('已通知逐局比分紀錄：本場比賽結束');
+  } catch (err) { repErr = '比賽結束還沒通知到逐局比分紀錄，稍後自動重試'; }
+  repStatus();
+}
+/* 計時設定 */
+function openClock() {
+  const s = sh(), c = clockOf(s), rd = (s.link && s.round) || '';
+  const preset = c ? (c.mins === 60 ? 'ko' : 'pre') : (/複|決|排名|準決/.test(rd) ? 'ko' : 'pre');
+  $('ck-preset').value = preset;
+  const st = new Date(c ? c.start : Date.now()); $('ck-start').value = st.toTimeString().slice(0, 5);
+  $('ck-state').innerHTML = c ? `已開始計時：開賽 <b>${st.toTimeString().slice(0, 5)}</b>，已進行 <b>${Math.floor(elapsedMin(c))}</b> 分鐘。` : '裁判宣告開賽時按「開始計時」；晚按了可以改開賽時間。';
+  $('ck-go').textContent = c ? '更新' : '開始計時'; $('ck-reset').hidden = !c;
+  $('dlg-clock').showModal();
+}
+$('clockbtn').onclick = openClock;
+$('ck-cancel').onclick = () => $('dlg-clock').close();
+$('ck-go').onclick = () => {
+  const P = CLOCK_PRESETS[$('ck-preset').value], [h, m] = ($('ck-start').value || '').split(':').map(Number), d = new Date();
+  if (!isNaN(h)) d.setHours(h, m || 0, 0, 0); if (d.getTime() > Date.now() + 60000) d.setDate(d.getDate() - 1);
+  const old = clockOf(sh()) || {}, c = { start: d.getTime(), mins: P.mins, noNew: P.noNew };
+  if (old.start === c.start) { c.warned = old.warned; c.over = old.over; }
+  setClock(c); $('dlg-clock').close(); toast(`比賽計時：${P.label}`); tickClock();
+};
+$('ck-reset').onclick = () => { setClock(null); $('dlg-clock').close(); tickClock(); toast('已取消比賽計時'); };
+
+document.addEventListener('click', e => { const d = document.querySelector('details.more'); if (d && d.open && (!d.contains(e.target) || e.target.closest('.menu .btn'))) setTimeout(() => d.open = false, 0); });
+/* 工具列 */
+$('undo').onclick = () => { const u = undo.pop(); if (!u) return; const o = JSON.parse(u); if (o.id && o.s) { DB.sheets[o.id] = o.s; DB.cur = o.id; } else DB.sheets[DB.cur] = o; save(); render(); toast('已復原'); $('undo').disabled = !undo.length; };
+const nickOf = tn => { tn = String(tn || ''); return (tn.match(/[（(]([^）)]+)[）)]/) || [])[1] || tn.replace(/^國立/, ''); };   // 隊名簡稱：有括號暱稱用暱稱
+function sheetShort(x) {   // 工具列上的簡短名稱：月/日 時間 先後攻・隊名簡稱（完整名稱放滑鼠提示）
+  const m = String(x.date || '').match(/\d{4}-(\d{2})-(\d{2})/), tn = String(x.team || ''), nick = (tn.match(/[（(]([^）)]+)[）)]/) || [])[1] || tn.replace(/^國立/, '');
+  return `${m ? +m[1] + '/' + +m[2] : ''} ${x.time || ''} ${x.pair ? (x.side === 'away' ? '先攻・' : '後攻・') : ''}${nick || '（未填隊伍）'}`.trim();
+}
+function sheetName(x) { return `${x.date || ''} ${x.time || ''} ${x.pair ? (x.side === 'away' ? '［先攻］' : '［後攻］') : ''}${x.team || '（未填隊伍）'}${x.field ? '・' + x.field : ''}`; }
+$('sheets').onclick = () => {
+  renderPick(); $('dlg-pick').showModal();
+};
+function renderPick() {
+  $('pick-list').innerHTML = Object.values(DB.sheets).sort((a, b) => b.updated - a.updated).map(x => `<div class="row"><button type="button" data-pick="${x.id}"${x.id === DB.cur ? ' class="now"' : ''}><span>${sheetName(x)}</span><small>${x.id === DB.cur ? '目前・' : ''}${x.rows.filter(r => r.res.some(Boolean)).length} 位已記</small></button><button type="button" class="del" data-del="${x.id}">刪除</button></div>`).join('');
+}
+$('pick-list').onclick = e => {
+  const d = e.target.closest('[data-del]');
+  if (d) {
+    if (!d.classList.contains('arm')) { $('pick-list').querySelectorAll('.del.arm').forEach(x => { x.classList.remove('arm'); x.textContent = '刪除'; }); d.classList.add('arm'); d.textContent = '確定刪除'; return; }
+    const id = d.dataset.del, name = sheetName(DB.sheets[id]), pr = DB.sheets[id].pair; if (pr && DB.sheets[pr]) DB.sheets[pr].pair = ''; delete DB.sheets[id];
+    if (!Object.keys(DB.sheets).length) { const n = blankSheet(); DB.sheets[n.id] = n; }
+    if (!DB.sheets[DB.cur]) { DB.cur = Object.values(DB.sheets).sort((a, b) => b.updated - a.updated)[0].id; undo = []; $('undo').disabled = true; }
+    save(); render(); renderPick(); toast('已刪除：' + name); return;
+  }
+  const b = e.target.closest('[data-pick]'); if (!b) return; DB.cur = b.dataset.pick; undo = []; $('undo').disabled = true; save(); render(); $('dlg-pick').close(); };
+$('pick-close').onclick = () => $('dlg-pick').close();
+$('new').onclick = () => {
+  const list = Object.values(DB.sheets).filter(x => x.rows.some(r => r.no)).sort((a, b) => b.updated - a.updated).slice(0, 8);
+  $('copy-list').innerHTML = list.length ? list.map(x => `<button type="button" data-copy="${x.id}"><span>複製背號：${x.team || '（未填隊伍）'}</span><small>${x.date} ${x.field || ''}</small></button>`).join('') : '<small style="color:var(--muted)">還沒有可複製的紀錄表</small>';
+  $('ng-away').value = ''; $('ng-home').value = ''; NG.first = ''; ngWho(); $('dlg-new').showModal(); ngLoadGames();
+};
+$('dlg-cancel').onclick = () => $('dlg-new').close();
+$('dlg-blank').onclick = () => { const s = blankSheet(); DB.sheets[s.id] = s; DB.cur = s.id; undo = []; save(); render(); $('dlg-new').close(); toast('已新增空白紀錄表'); };
+$('copy-list').onclick = e => { const b = e.target.closest('[data-copy]'); if (!b) return; const s = blankSheet(DB.sheets[b.dataset.copy]); DB.sheets[s.id] = s; DB.cur = s.id; undo = []; save(); render(); $('dlg-new').close(); toast('已新增，背號已帶入'); };
+function download(name, text, type) {
+  try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('已下載 ' + name); }
+  catch (_) { toast('此環境不支援下載'); }
+}
+const fname = ext => `打擊紀錄表_${sh().date || ''}_${(sh().team || '未填隊伍').replace(/[\\/:*?"<>|\s]/g, '')}.${ext}`;
+$('exp-csv').onclick = () => {
+  const s = sh(), q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [['隊伍', s.team, '球場', s.field, '天氣', s.weather, '風勢', s.wind, '日期', s.date, '時間', s.time].map(q).join(','), '',
+    ['棒次', '背號', '輪次', '落點', '結果', '本打席打點', '本打席得分', '代跑', '落點備註', '結果備註', '全場得分', '全場打點'].map(q).join(',')];
+  s.rows.forEach(r => { const used = r.res.map((v, i) => v || r.loc[i] ? i : -1).filter(i => i >= 0);
+    if (!used.length && !r.no) return;
+    (used.length ? used : [-1]).forEach((i, j) => lines.push([r.ord, r.no, i >= 0 ? i + 1 : '', i >= 0 ? (r.loc[i] === '—' ? '' : r.loc[i]) : '', i >= 0 ? r.res[i] : '', i >= 0 ? (r.rbi[i] || 0) : '', i >= 0 ? (r.sc[i] ? 1 : 0) : '', i >= 0 && r.pr[i] ? `${r.pr[i].swap ? '換人' : '臨時'}#${r.pr[i].no}` : '', j ? '' : r.locNote, j ? '' : r.resNote, j ? '' : r.R, j ? '' : r.RBI].map(q).join(','))); });
+  download(fname('csv'), '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+};
+$('exp-json').onclick = () => download(fname('json'), JSON.stringify({ format: 'spray-sheet-v4', sheet: sh() }, null, 1), 'application/json');
+$('imp').onclick = () => $('imp-file').click();
+$('imp-file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const o = JSON.parse(await f.text()), s = norm(o.sheet || o); if (!s.rows) throw 0; s.id = 's' + Date.now().toString(36); recalc(s); DB.sheets[s.id] = s; DB.cur = s.id; save(); render(); toast('已匯入紀錄表'); }
+  catch (_) { toast('檔案格式不正確'); }
+};
+$('print').onclick = () => print();
+$('fs').onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch (_) { toast('這個瀏覽器不允許全螢幕'); } };
+$('undo').disabled = true;
+
+function fit() {   // 上方若有其他橫條（例如示範版提示列），扣掉它的高度
+  const a = document.querySelector('.app'), f = document.body.firstElementChild, top = f && f !== a && f.offsetHeight < 200 ? f.offsetHeight : 0;
+  const H = innerHeight - top, k = Math.min(innerWidth / 1340, H / 800);
+  document.documentElement.style.setProperty('--k', k.toFixed(3));
+  a.style.transform = `translate(${Math.max(0, (innerWidth - 1340 * k) / 2)}px,${top + Math.max(0, (H - 800 * k) / 2)}px) scale(${k})`; }
+addEventListener('resize', fit); addEventListener('DOMContentLoaded', () => setTimeout(fit, 0)); fit();
+Object.values(DB.sheets).forEach(x => { try { recalc(x); } catch (_) {} });
+{ const q = new URLSearchParams(location.search), g = q.get('g');   // 從其他頁帶場次過來：直接開這一場的紀錄表（輪到進攻的那一隊）
+  if (g) { const hit = Object.values(DB.sheets).filter(x => x.link && x.link.gid === g).sort((a, b) => b.updated - a.updated);
+    const t = hit.find(x => myTurn(x)) || hit[0]; if (t) DB.cur = t.id; history.replaceState(null, '', location.pathname); } }   // 開啟時重新計算（含補回全壘打打者得分）
+drawField(); renderPad(); render();
+fillTeamList();
+loadRoster().then(ok => { if (ok) { fillTeamList(); matchTeam(); sh().rows.forEach((r, i) => { if (r.no && !r.name) autoName(i); }); save(); render(); } else teamBadge(); });
+
+
+/* ---------- 以場次為準的連結：打擊落點紀錄連結了某場後，各頁之間的連結自動帶到那一場（12 小時內有效） ---------- */
+function focusGame() { try { const f = JSON.parse(localStorage.getItem('sb-focus') || 'null'); if (f && f.g && Date.now() - f.at < 12 * 3600e3) return f; } catch (_) {} return null; }
+function focusHref(h) { const f = focusGame(); if (!f || !/^(admin|score|scorer|index|standings|sheet)\.html(\?|#|$)/.test(h) || /[?&]g=/.test(h)) return h;
+  const [p, hash] = h.split('#'); let extra = '';
+  if (/^(index|scorer)\.html/.test(h) && typeof sh === 'function') { try { const s = sh(), row = s.rows[s.cur.r]; if (row && row.pid && s.teamId) extra = '&p=' + encodeURIComponent(row.pid) + '&tm=' + encodeURIComponent(s.teamId); } catch (_) {} }   // 從打擊落點紀錄過去：只看目前這位打者
+  return p.split('?')[0] + '?t=' + encodeURIComponent(f.t) + '&g=' + encodeURIComponent(f.g) + extra + (hash ? '#' + hash : ''); }
+document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('a[href]'); if (!a) return; const h = a.getAttribute('href'), n = focusHref(h); if (n !== h) a.setAttribute('href', n); }, true);
+</script>
+</body>
+</html>

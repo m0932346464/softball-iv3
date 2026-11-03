@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#0e1d3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="慢壘紀錄">
+<title>預賽排名看板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<link rel="stylesheet" href="common.css">
+<style>
+/* 版面：頁首（賽事、組別切換）→ 各組積分表（排名、戰績、名次依據）→ 進行中／下一場 */
+.page{max-width:980px}
+.grp-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.grp-tabs button{flex:1 1 0;min-width:64px;border:1px solid var(--rule);background:var(--surface);border-radius:999px;padding:8px 10px;font-weight:700;cursor:pointer;color:var(--ink)}
+.grp-tabs button[aria-pressed="true"]{background:var(--navy);color:var(--navy-ink);border-color:var(--navy)}
+.gsec{display:flex;flex-direction:column;gap:8px}
+.gsec h2{margin:0;font-size:17px;display:flex;align-items:center;gap:8px}
+.state{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px}
+.state.final{background:color-mix(in srgb,var(--r3) 18%,transparent);color:var(--r3)}
+.state.temp{background:color-mix(in srgb,var(--r2) 22%,transparent);color:#9a5b00}
+table.std{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--rule);border-radius:10px;overflow:hidden;font-size:15px;font-variant-numeric:tabular-nums}
+table.std th{background:var(--navy);color:var(--navy-ink);font-size:12px;font-weight:700;padding:9px 6px;text-align:center;white-space:nowrap}
+table.std td{padding:11px 6px;text-align:center;border-top:1px solid var(--rule)}
+table.std td.tm,table.std th.tm{text-align:left;padding-left:12px}
+table.std td.tm{font-weight:700}
+table.std td.pts{font-weight:700;font-size:17px}
+.rk{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;font:700 16px var(--display);background:var(--sunk)}
+.rk.r1{background:#e8e24a;color:#13203a}.rk.r2{background:#d9dee8}.rk.r3{background:#f0c9a0}
+.basis{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:700;white-space:nowrap}
+.basis.lot{background:color-mix(in srgb,var(--r1) 14%,transparent);color:var(--r1)}
+.livepill{display:inline-block;font-size:11px;color:var(--r1);font-weight:700;margin-left:6px}
+.games{display:flex;flex-direction:column;gap:6px}
+.gm{display:grid;grid-template-columns:70px minmax(0,1fr) auto minmax(0,1fr) 64px;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:8px 12px;font-size:14px}
+.gm .t{color:var(--muted);font-size:12px}
+.gm .a{text-align:right}.gm .sc{font:700 18px var(--display);text-align:center;min-width:64px}
+.gm .st{font-size:11px;text-align:right;color:var(--muted)}
+.gm.live{border-color:var(--r1)}.gm.live .st{color:var(--r1);font-weight:700}
+.rule{font-size:12px;color:var(--muted);line-height:1.7;margin:0}
+.hide-sm{}
+tr.trow{cursor:pointer}
+tr.trow:hover td,tr.trow.open td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+tr.trow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.caret{color:var(--muted);font-size:11px;margin-left:6px}
+.mv{display:inline-block;margin-left:4px;font:700 12px var(--display)}
+.mv.up{color:var(--r3)}.mv.dn{color:var(--r1)}
+tr.xrow td{padding:8px 12px;text-align:left;background:color-mix(in srgb,var(--accent) 4%,transparent)}
+.xg{display:flex;flex-wrap:wrap;gap:6px}
+.gx{font-size:12px;border:1px solid var(--rule);border-radius:999px;padding:2px 10px;background:var(--surface);white-space:nowrap}
+.gx.w{border-color:var(--r3);color:var(--r3)}.gx.l{border-color:var(--r1);color:var(--r1)}.gx.live{border-color:var(--r1);color:var(--r1);font-weight:700}.gx.next{color:var(--muted)}
+@media (max-width:640px){.mv{display:block;margin:2px 0 0;font-size:11px}.caret{display:none}}
+@media (max-width:640px){.hide-sm{display:none}table.std{font-size:14px;table-layout:fixed}table.std td{padding:9px 2px}table.std th{padding:8px 2px}table.std th:first-child{width:36px}table.std th:not(.tm):not(:first-child){width:34px}table.std td.tm{padding-left:6px;word-break:break-all;overflow-wrap:anywhere;white-space:normal;line-height:1.3}.livepill{display:block;margin:2px 0 0;font-size:10px}.rk{width:24px;height:24px;font-size:14px}.page{padding-inline:12px}.gm{grid-template-columns:52px minmax(0,1fr) auto minmax(0,1fr);}.gm .st{display:none}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+</head>
+<body>
+<header class="mast">
+  <div class="in mast-top">
+    <h1>預賽排名看板</h1>
+    <div class="who">
+      <span class="sync" id="sync"><i></i><span id="sync-txt">即時同步</span></span>
+      <a href="score.html" style="color:var(--mast-ink)">逐局比分紀錄</a>
+      <a href="sheet.html" style="color:var(--mast-ink)">打擊落點紀錄</a>
+      <a href="index.html" style="color:var(--mast-ink)">後台資訊中控</a>
+    </div>
+  </div>
+  <div class="in mast-bar">
+    <label for="sel-t" class="w-t">賽事<select id="sel-t"></select></label>
+    <span class="note" id="tour-meta" style="color:var(--mast-muted);align-self:center"></span>
+  </div>
+</header>
+
+<div class="in page">
+  <div id="setup" class="readonly-note" hidden>尚未連接資料庫：請在 config.js 貼上 Firebase 專案設定。</div>
+  <div class="grp-tabs" id="grp-tabs" role="tablist" aria-label="組別"></div>
+  <div id="groups" style="display:flex;flex-direction:column;gap:22px"></div>
+  <p class="rule">勝 3 分、和 1 分、敗 0 分。得分、失分、防守局數隨逐局比分紀錄每局回報即時累計；勝、和、敗與積分在按下「比賽結束」後計入。積分相同時依序比較：① 勝負關係（同分隊伍之間的對戰）② 總失分少 ③ 總得分多 ④ 總防守局數多 ⑤ 抽籤。各組比賽全部結束前為「暫定排名」。</p>
+</div>
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<script>
+'use strict';
+const LS = 'sb-std-v1', U = { tid: '', grp: '' };
+try { Object.assign(U, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (_) {}
+const saveU = () => { try { localStorage.setItem(LS, JSON.stringify(U)); } catch (_) {} };
+let focusG = '';
+{ const q = new URLSearchParams(location.search); if (q.get('t')) U.tid = q.get('t'); const g = q.get('g'); if (g) { if (/^[A-Za-z]$|組/.test(g) || g.length <= 2) U.grp = g; else focusG = g; } if (q.get('t')) history.replaceState(null, '', location.pathname); }
+const D = { tournaments: [], teams: [], games: [] };
+let unsub = [];
+const teamName = id => (D.teams.find(t => t.id === id) || {}).name || '—';
+const hhmm = g => { const t = tpe(g.scheduledAt); return t ? `${t.m}/${t.d} ${t.hh}:${t.mm}` : ''; };
+
+if (!FB.ready) $('setup').hidden = false; else loadTournaments();
+
+async function loadTournaments() {
+  const s = await FB.db.collection('tournaments').get();
+  D.tournaments = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')));
+  if (!D.tournaments.some(t => t.id === U.tid)) U.tid = D.tournaments[0]?.id || '';
+  $('sel-t').innerHTML = D.tournaments.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('') || '<option value="">尚無賽事</option>';
+  $('sel-t').value = U.tid; open_();
+}
+$('sel-t').onchange = e => { U.tid = e.target.value; U.grp = ''; open_(); };
+function open_() {
+  unsub.forEach(f => f()); unsub = []; saveU();
+  const t = D.tournaments.find(x => x.id === U.tid);
+  $('tour-meta').textContent = t ? [t.startDate, t.endDate].filter(Boolean).join(' – ') : '';
+  if (!t) return render();
+  unsub.push(col(U.tid, 'teams').onSnapshot(s => { D.teams = s.docs.map(d => ({ id: d.id, ...d.data() })); render(); }));
+  unsub.push(col(U.tid, 'games').onSnapshot({ includeMetadataChanges: true }, s => {
+    D.games = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.scheduledAt?.seconds || 0) - (b.scheduledAt?.seconds || 0));
+    $('sync').className = 'sync' + (!navigator.onLine ? ' off' : ''); $('sync-txt').textContent = navigator.onLine ? '即時同步' : '離線';
+    render();
+  }, e => toast(friendlyError(e))));
+}
+
+/* 名次升降：和「最近一場結束前」的排名相比 */
+function prevRanks(games) {
+  const fin = games.filter(g => g.status === 'final').sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
+  const out = new Map(); const byGrp = new Map();
+  for (const g of fin) { const grp = (D.teams.find(t => t.id === g.awayId) || {}).group; if (grp && !byGrp.has(grp)) byGrp.set(grp, g.id); }
+  for (const [grp, gid] of byGrp) {
+    const rows = standings(D.teams, games.map(g => g.id === gid ? Object.assign({}, g, { status: 'scheduled', innings: {}, awayScore: null, homeScore: null }) : g), { live: true });
+    rows.filter(r => r.group === grp).forEach(r => out.set(r.id, r.rank));
+  }
+  return out;
+}
+const OPEN = new Set();
+function teamGames(id) {
+  return D.games.filter(g => g.awayId === id || g.homeId === id).map(g => {
+    const me = g.awayId === id ? 'away' : 'home', op = me === 'away' ? 'home' : 'away';
+    const ms = g[me + 'Score'], os = g[op + 'Score'], st = g.status || 'scheduled';
+    const res = st === 'final' ? (ms > os ? 'w' : ms < os ? 'l' : 'd') : st === 'live' ? 'live' : 'next';
+    return { g, res, opp: teamName(g[op + 'Id']), ms, os };
+  });
+}
+function render() {
+  if (focusG && D.games.length && D.teams.length) { const g = D.games.find(x => x.id === focusG), t = g && D.teams.find(x => x.id === g.awayId || x.id === g.homeId); if (t && t.group) U.grp = t.group; focusG = ''; }   // 帶場次過來：切到該場所屬的組
+  const rows = standings(D.teams, D.games, { live: true });
+  const prev = prevRanks(D.games);
+  const groups = [...new Set(rows.map(r => r.group))].filter(Boolean).sort();
+  if (!groups.includes(U.grp) && U.grp !== 'all') U.grp = groups[0] || 'all';
+  $('grp-tabs').innerHTML = groups.map(g => `<button type="button" role="tab" data-g="${esc(g)}" aria-pressed="${U.grp === g}">${esc(g)} 組</button>`).join('')
+    + (groups.length > 1 ? `<button type="button" data-g="all" aria-pressed="${U.grp === 'all'}">全部</button>` : '');
+  const show = U.grp === 'all' ? groups : [U.grp];
+  $('groups').innerHTML = show.map(g => {
+    const list = rows.filter(r => r.group === g), ids = new Set(list.map(r => r.id));
+    const gGames = D.games.filter(x => /預賽/.test(x.round || '預賽') && ids.has(x.homeId) && ids.has(x.awayId));
+    const done = gGames.length && gGames.every(x => x.status === 'final');
+    const live = gGames.filter(x => x.status === 'live'), next = gGames.filter(x => (x.status || 'scheduled') === 'scheduled').slice(0, 3);
+    return `<section class="gsec">
+      <h2>${esc(g)} 組積分與排名 <span class="state ${done ? 'final' : 'temp'}">${done ? '最終排名' : '暫定排名'}</span><span class="note" style="font-weight:400;font-size:12px">${gGames.filter(x => x.status === 'final').length}/${gGames.length} 場已結束</span></h2>
+      <table class="std"><thead><tr><th>排名</th><th class="tm">學校</th><th class="hide-sm">場數</th><th>勝</th><th>和</th><th>敗</th><th>積分</th><th>得分</th><th>失分</th><th class="hide-sm">防守局數</th><th class="hide-sm">名次依據</th></tr></thead>
+      <tbody>${list.map(r => { const pv = prev.get(r.id), mv = pv != null ? pv - r.rank : 0, open = OPEN.has(r.id); return `<tr class="trow${open ? ' open' : ''}" data-team="${r.id}" tabindex="0" aria-expanded="${open}"><td><span class="rk ${r.g ? 'r' + r.rank : ''}">${r.rank}</span>${mv ? `<span class="mv ${mv > 0 ? 'up' : 'dn'}" title="與最近一場結束前相比">${mv > 0 ? '▲' : '▼'}${Math.abs(mv)}</span>` : ''}</td>
+        <td class="tm">${esc(r.name)}<span class="caret">${open ? '▴' : '▾'}</span>${r.live ? '<span class="livepill">● 比賽中</span>' : ''}</td><td class="hide-sm">${r.g}</td>
+        <td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td class="pts">${r.pts}</td><td>${r.rs}</td><td>${r.ra}</td><td class="hide-sm">${r.def}</td>
+        <td class="hide-sm">${r.basis ? `<span class="basis ${r.basis === '需抽籤' ? 'lot' : ''}">${r.basis}</span>` : ''}</td></tr>
+        ${open ? `<tr class="xrow"><td colspan="11"><div class="xg">${teamGames(r.id).map(x => x.res === 'next'
+          ? `<span class="gx next">下一場 ${hhmm(x.g)}${x.g.field ? ' ' + esc(x.g.field) : ''} vs ${esc(x.opp)}</span>`
+          : `<span class="gx ${x.res}">${{ w: '勝', l: '敗', d: '和', live: '● 進行中' }[x.res]} ${esc(x.opp)} ${x.ms ?? 0}:${x.os ?? 0}</span>`).join('') || '<span class="note">尚無賽程</span>'}</div></td></tr>` : ''}`; }).join('')}</tbody></table>
+      ${live.length || next.length ? `<div class="games">${live.concat(next).map(x => `<div class="gm ${x.status === 'live' ? 'live' : ''}"><span class="t">${hhmm(x)}<br>${esc(x.field || '')}</span><span class="a">${esc(teamName(x.awayId))}</span><span class="sc">${x.status === 'live' ? `${x.awayScore ?? 0} : ${x.homeScore ?? 0}` : 'vs'}</span><span>${esc(teamName(x.homeId))}</span><span class="st">${x.status === 'live' ? '● 比賽中' : '未開賽'}</span></div>`).join('')}</div>` : ''}
+    </section>`;
+  }).join('') || '<p class="empty-state">尚無分組資料</p>';
+  fixSpan(); saveU();
+}
+/* 展開列橫跨目前看得到的欄位數（手機會隱藏部分欄位） */
+function fixSpan() { document.querySelectorAll('tr.xrow td').forEach(td => { td.colSpan = [...td.closest('table').querySelectorAll('thead th')].filter(th => th.offsetWidth > 0).length; }); }
+addEventListener('resize', fixSpan);
+$('groups').addEventListener('click', e => { const tr = e.target.closest('tr.trow'); if (!tr) return; const id = tr.dataset.team; OPEN.has(id) ? OPEN.delete(id) : OPEN.add(id); render(); });
+$('groups').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('tr.trow')) { e.preventDefault(); e.target.click(); } });
+$('grp-tabs').addEventListener('click', e => { const g = e.target.closest('button')?.dataset.g; if (g) { U.grp = g; render(); } });
+</script>
+</body>
+</html>

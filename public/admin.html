@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#0e1d3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="慢壘紀錄">
+<title>賽務管理後台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+.confirm{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--rule);box-shadow:0 -6px 20px rgba(0,0,0,.12);padding-block:12px calc(12px + env(safe-area-inset-bottom,0px))}
+.confirm .in{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.btn-danger{background:var(--r1);color:#fff;border:0;border-radius:6px;padding:7px 14px;font-size:13px}
+.tabs.main{background:var(--surface);border:1px solid var(--rule);border-radius:8px}
+#game-rows tr.focus td{background:#fff3c4}
+#game-rows tr.focus td:first-child{box-shadow:inset 4px 0 0 #e0a100}
+.te-alias input{width:220px}
+@media (max-width:900px){.te-alias input{width:140px}}
+.hist-pane{display:flex;flex-direction:column;gap:14px}.hist-pane[hidden]{display:none}
+.hist-pane .pb{gap:10px}
+.hx-preview{display:flex;flex-direction:column;gap:8px}.hx-preview:empty{display:none}
+.hx-sum{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;background:var(--sunk);border:1px solid var(--rule);border-radius:8px;padding:8px 12px}
+table.xp td{vertical-align:top}.xp-c{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:3px 0;font-size:13px}.xp-c+.xp-c{border-top:1px dashed var(--rule)}.xp-b{display:flex;gap:4px;margin-left:auto}
+.badge.ok{background:color-mix(in srgb,#1f8a4c 18%,transparent);color:#1f8a4c}
+.ar-banner{background:color-mix(in srgb,var(--r2) 16%,var(--surface));border:1px solid color-mix(in srgb,var(--r2) 45%,transparent);border-radius:10px;padding:10px 14px;font-weight:600;font-size:14px}
+body.t-archived .tabpane:not([data-t="hist"]) :is(input,select,textarea,button.primary,button.del,button.danger,label.ghost,label.primary,.tm-new button){pointer-events:none;opacity:.5}
+body.t-archived .tabpane:not([data-t="hist"]) #st-team,body.t-archived .tabpane:not([data-t="hist"]) #st-min,body.t-archived #tm-q,body.t-archived #team-sel{pointer-events:auto;opacity:1}
+body.t-archived #hx-file+*,body.t-archived label[for="hx-file"]{pointer-events:none;opacity:.5}
+</style>
+<link rel="stylesheet" href="common.css">
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<style>
+/* 球隊名單：一個畫面看完，清單與名單各自捲動 */
+.teams-split{grid-template-columns:clamp(280px,24vw,340px) minmax(0,1fr)}
+.teams-side,.roster-panel{display:flex;flex-direction:column;max-height:calc(100vh - 232px);min-height:420px}
+.teams-side .ph h2 .note{font-weight:400;letter-spacing:0;margin-left:4px}
+button.sm,label.sm{min-height:30px;padding:3px 10px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center}
+.tm-new{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--rule);background:var(--sunk)}
+.tm-new input{min-width:0;flex:1}
+.tm-search{padding:8px 10px;border-bottom:1px solid var(--rule)}
+.tm-search input{width:100%}
+.team-list{overflow-y:auto;flex:1;min-height:0}
+.team-list .grp{position:sticky;top:0;background:var(--sunk);font:700 11px var(--display);letter-spacing:.12em;color:var(--muted);padding:5px 14px;border-bottom:1px solid var(--rule);z-index:1}
+.team-list button{padding:7px 14px;align-items:center}
+.team-list button>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.team-list button .note{white-space:nowrap;flex:none}
+.team-sel{display:none;margin:8px 10px}
+.team-head{flex-wrap:nowrap;align-items:center;gap:10px}
+.team-edit{display:flex;gap:8px;align-items:center;flex:1;min-width:0}
+.team-edit label{display:flex;align-items:center;gap:6px;margin:0;white-space:nowrap}
+.team-edit .lbl{font-size:11px;color:var(--muted);font-weight:500}
+.te-name{flex:1;min-width:0;max-width:420px}
+.te-name{font-weight:700;font-size:16px;width:100%}
+.te-grp input{width:56px;text-align:center}
+.saved{font-size:12px;color:#1f8a4c;align-self:center;white-space:nowrap}
+.imp-box{display:flex;flex-direction:column;gap:6px;padding:10px 14px;border-bottom:1px solid var(--rule);background:var(--sunk)}
+.imp-box textarea{width:100%;font:13px/1.5 var(--body);color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:8px}
+#roster-pane{display:flex;flex-direction:column;flex:1;min-height:0}
+#roster-pane[hidden]{display:none}
+.add-bar{display:grid;grid-template-columns:84px minmax(0,240px) 80px 130px auto;justify-content:start;gap:6px;padding:8px 14px;border-bottom:1px solid var(--rule);background:var(--sunk)}
+.add-bar input,.add-bar select{min-width:0}
+.roster-scroll{overflow:auto;flex:1;min-height:0}
+.roster-scroll table{table-layout:fixed;width:100%}
+.roster-scroll thead{position:sticky;top:0;z-index:2}
+.roster-scroll thead th{background:var(--surface);box-shadow:0 1px 0 var(--rule)}
+.roster-scroll thead .add-row td{background:var(--sunk);padding:6px 4px;border-bottom:1px solid var(--rule)}
+.add-row input,.add-row select{width:100%;min-width:0}
+.add-row td:last-child,#roster-rows td:last-child{text-align:center}
+#roster-rows .del{display:inline-flex;margin:0 auto}
+#np-add{white-space:nowrap}
+.c-no{width:11%}.c-nm{width:41%}.c-sx{width:14%}.c-bt{width:20%}.c-x{width:14%}
+#roster-rows td:last-child{text-align:left}
+#roster-rows input,#roster-rows select{width:100%;min-width:0;border:1px solid transparent;background:transparent;border-radius:5px;padding:4px 7px;font:inherit;color:inherit;min-height:0}
+#roster-rows input:hover,#roster-rows select:hover{border-color:var(--rule)}
+#roster-rows input:focus,#roster-rows select:focus{border-color:var(--accent);background:var(--surface);outline:none}
+#roster-rows td{padding-block:2px}
+#roster-rows input.bad{border-color:var(--r1)}
+#roster-rows tr.fem select[data-k=sex]{color:#c2185b;font-weight:700}
+.roster-tip{margin:0;padding:6px 14px;border-top:1px solid var(--rule)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (max-width:760px){
+  .teams-split{grid-template-columns:minmax(0,1fr)}
+  .teams-side,.roster-panel{max-height:none;min-height:0}
+  .team-list,.tm-search{display:none}.team-sel{display:block}
+  .team-head{flex-wrap:wrap}.team-edit{flex:1 1 100%}.te-name{max-width:none}
+  .add-bar{grid-template-columns:56px minmax(0,1fr) 56px 76px;padding-inline:10px}.add-bar button{grid-column:1/-1}
+  .roster-scroll{max-height:60vh}
+  .c-no{width:46px}.c-nm{width:auto}.c-sx{width:62px}.c-bt{width:82px}.c-x{width:44px}
+  #roster-pane select,#roster-pane input{padding-inline:4px}
+  #np-add .t{display:none}
+}
+.basis{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:700}
+.basis.lot{background:color-mix(in srgb,var(--r1) 14%,transparent);color:var(--r1)}
+</style>
+<style>
+.imp-card{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:8px 10px;font-size:13px}
+.imp-card[aria-current="true"]{border:2px solid var(--navy)}
+.imp-card b{font-size:14px}.imp-card .note{font-size:12px}
+.imp-map td,.imp-map th,.imp-pa td,.imp-pa th{padding:4px 8px}
+.imp-map select{min-width:180px}
+.imp-pa{font-size:12.5px}
+.imp-line{display:flex;gap:4px;flex-wrap:wrap}.imp-line span{border:1px solid var(--rule);border-radius:6px;padding:2px 8px;font-size:13px}
+.imp-warn{background:color-mix(in srgb,var(--r2) 14%,transparent);border-radius:6px;padding:8px 10px;font-size:13px}
+@media (max-width:900px){section[data-t="imports"]{grid-template-columns:1fr!important}}
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="in mast-top">
+    <h1>賽務管理後台</h1>
+    <div class="who" id="who" hidden>
+      <span id="who-email"></span>
+      <a href="sheet.html" style="color:var(--mast-ink)">打擊落點紀錄</a>
+      <a href="index.html" style="color:var(--mast-ink)">後台資訊中控</a>
+      <button id="logout" type="button">登出</button>
+    </div>
+  </div>
+  <div class="in mast-bar" id="mast-bar" hidden>
+    <label class="w-t" for="sel-t">賽事<select id="sel-t"></select></label>
+  </div>
+</header>
+
+<div class="in page">
+  <div id="setup" class="gate" hidden>
+    <div class="panel"><div class="pb">
+      <h2 style="margin:0;font-size:16px">尚未連接資料庫</h2>
+      <p class="note">請在 <b>config.js</b> 貼上 Firebase 專案設定，再重新整理此頁。設定步驟見 README.md。</p>
+    </div></div>
+  </div>
+  <div id="gate" class="gate" hidden>
+    <div class="panel">
+      <div class="ph"><h2>管理員登入</h2></div>
+      <div class="pb">
+        <form id="login-form">
+          <input id="li-email" type="email" placeholder="Email" autocomplete="username" required>
+          <input id="li-pass" type="password" placeholder="密碼" autocomplete="current-password" required>
+          <button class="primary" type="submit">登入</button>
+          <p class="err" id="li-err"></p>
+          <p class="note" style="text-align:center;margin:0">第一次使用？<a href="signup.html">前往紀錄員註冊頁</a></p>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div id="denied" class="gate" hidden>
+    <div class="panel"><div class="pb">
+      <h2 style="margin:0;font-size:16px">此帳號沒有管理權限</h2>
+      <p class="note">後台僅限管理員使用。紀錄員請改用<a href="sheet.html">打擊落點紀錄</a>記錄並上傳。</p>
+    </div></div>
+  </div>
+
+  <div id="app" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="ar-banner" id="ar-banner" hidden>🔒 本屆已封存：資料只能查看、不能修改。需要更正時，到「歷史資料」分頁按「解除封存」。</div>
+    <div class="tabs main" role="tablist">
+      <button class="tab" role="tab" type="button" data-t="tour">賽事</button>
+      <button class="tab" role="tab" type="button" data-t="teams">球隊名單</button>
+      <button class="tab" role="tab" type="button" data-t="games">賽程比分</button>
+      <button class="tab" role="tab" type="button" data-t="stats">成績統計</button>
+      <button class="tab" role="tab" type="button" data-t="imports">待匯入 <span class="badge pending" id="shi-badge" hidden></span></button>
+      <button class="tab" role="tab" type="button" data-t="hist">歷史資料</button>
+      <button class="tab" role="tab" type="button" data-t="users">紀錄員</button>
+    </div>
+
+    <!-- 賽事 -->
+    <section class="panel tabpane" data-t="tour">
+      <div class="ph"><h2 id="tour-title">賽事設定</h2><button class="ghost" type="button" id="tour-new">＋ 新增賽事</button></div>
+      <form class="pb" id="tour-form">
+        <div class="form-grid">
+          <label for="tf-name" style="grid-column:1/-1">賽事名稱<input id="tf-name" required placeholder="例：2026 第14屆全國EMBA慢壘賽"></label>
+          <label for="tf-start">開始日期<input id="tf-start" type="date"></label>
+          <label for="tf-end">結束日期<input id="tf-end" type="date"></label>
+          <label for="tf-book" style="grid-column:1/-1">秩序冊連結（OneDrive／Google Drive 分享連結，後台資訊中控頂部會顯示「秩序冊」）<input id="tf-book" type="url" placeholder="https://"></label>
+          <label for="tf-preset">球場規格<select id="tf-preset"><option value="m">男子／混合組（300 呎）</option><option value="w">女子組（275 呎）</option><option value="c">自訂</option></select></label>
+          <label for="tf-L">邊線全壘打牆（呎）<input id="tf-L" type="number" min="150" max="420"></label>
+          <label for="tf-C">中外野全壘打牆（呎）<input id="tf-C" type="number" min="150" max="420"></label>
+          <label for="tf-B">壘間距離（呎）<input id="tf-B" type="number" min="40" max="90"></label>
+          <label for="tf-P">投手距離（呎）<input id="tf-P" type="number" min="30" max="70"></label>
+        </div>
+        <div class="inn-row"><button class="primary" type="submit" id="tf-save">儲存</button><span class="spacer"></span><button class="ghost danger" type="button" id="tour-del">刪除此賽事</button></div>
+      </form>
+    </section>
+
+    <!-- 球隊名單 -->
+    <section class="tabpane split teams-split" data-t="teams" hidden>
+      <div class="panel teams-side">
+        <div class="ph"><h2>球隊 <span class="note" id="team-count"></span></h2>
+          <div class="inn-row" style="gap:4px"><button class="ghost sm" type="button" id="tm-toggle">＋ 新增</button><label class="ghost sm" for="bulk-file" title="CSV 欄位：球隊、背號、姓名、左右打、組別；沒有的球隊會自動建立">匯入 CSV</label><input id="bulk-file" type="file" accept=".csv,.txt" hidden></div>
+        </div>
+        <form class="tm-new" id="team-form" hidden>
+          <input id="tm-name" required placeholder="新球隊名稱" aria-label="新球隊名稱">
+          <input id="tm-group" placeholder="組" aria-label="組別" style="width:52px;text-align:center">
+          <button class="primary sm" type="submit">新增</button>
+        </form>
+        <div class="tm-search"><input id="tm-q" type="search" placeholder="搜尋球隊" aria-label="搜尋球隊"></div>
+        <select id="team-sel" class="team-sel" aria-label="選擇球隊"></select>
+        <div class="list team-list" id="team-list"></div>
+      </div>
+      <div class="panel roster-panel">
+        <div class="ph team-head">
+          <div class="team-edit" id="team-edit">
+            <input id="te-name" class="te-name" autocomplete="off" aria-label="隊名" title="直接修改隊名">
+            <label class="te-grp"><span class="lbl">組別</span><input id="te-group" autocomplete="off" placeholder="—"></label>
+            <label class="te-alias" title="同一隊在不同屆用過的名稱，查歷屆資料時會一起算"><span class="lbl">別名</span><input id="te-alias" autocomplete="off" placeholder="其他屆用過的隊名，以逗號分隔"></label>
+            <span class="saved" id="te-saved" aria-live="polite"></span>
+          </div>
+          <div class="inn-row" style="gap:4px">
+            <button class="ghost sm" type="button" id="imp-toggle">貼上名單</button>
+            <button class="ghost sm danger" type="button" id="team-del">刪除球隊</button>
+          </div>
+        </div>
+        <div class="imp-box" id="imp-box" hidden>
+          <span class="note">每行：背號 姓名 左右打（可從 Excel 直接貼上；同背號會更新）</span>
+          <textarea id="imp-text" rows="5" placeholder="24 王小明 右&#10;7 陳大同 左&#10;15 林志豪"></textarea>
+          <div class="inn-row"><label class="ghost sm" for="imp-file">選擇 CSV 檔</label><input id="imp-file" type="file" accept=".csv,.txt" hidden><span class="spacer"></span><button class="ghost sm" type="button" id="imp-cancel">取消</button><button class="primary sm" type="button" id="imp-go">匯入</button></div>
+        </div>
+        <div id="roster-pane">
+          <h2 class="sr-only" id="roster-title">名單</h2>
+          <div class="roster-scroll"><table>
+            <colgroup><col class="c-no"><col class="c-nm"><col class="c-sx"><col class="c-bt"><col class="c-x"></colgroup>
+            <thead><tr><th>背號</th><th>姓名</th><th>性別</th><th>打擊</th><th></th></tr>
+              <tr class="add-row"><td><input id="np-no" inputmode="numeric" placeholder="背號" autocomplete="off" aria-label="新球員背號"></td><td><input id="np-name" placeholder="新增球員姓名，按 Enter 加入" autocomplete="off" aria-label="新球員姓名"></td><td><select id="np-sex" aria-label="性別"><option value="M">男</option><option value="F">女</option></select></td><td><select id="np-bats" aria-label="打擊"><option value="R">右打</option><option value="L">左打</option><option value="S">左右開弓</option></select></td><td><button class="primary sm" type="button" id="np-add" aria-label="加入球員">＋<span class="t"> 加入</span></button></td></tr></thead>
+            <tbody id="roster-rows"></tbody>
+          </table></div>
+          <p class="note roster-tip">點背號、姓名或打擊直接修改，離開欄位或按 Enter 自動儲存</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 賽程比分 -->
+    <section class="tabpane" data-t="games" hidden style="display:flex;flex-direction:column;gap:14px">
+      <div class="panel">
+        <div class="ph"><h2>新增場次</h2></div>
+        <form class="pb" id="game-form">
+          <div class="form-grid">
+            <label for="gf-no">場次編號<input id="gf-no" placeholder="例：12"></label>
+            <label for="gf-dt">日期時間<input id="gf-dt" type="datetime-local" required></label>
+            <label for="gf-field">場地<input id="gf-field" placeholder="例：A 場"></label>
+            <label for="gf-round">輪次／組別<input id="gf-round" placeholder="例：預賽 A 組"></label>
+            <label for="gf-away">客隊（先攻）<select id="gf-away" required></select></label>
+            <label for="gf-home">主隊（後攻）<select id="gf-home" required></select></label>
+          </div>
+          <button class="primary" type="submit">新增場次</button>
+          <div class="inn-row" style="border-top:1px solid var(--rule);padding-top:12px">
+            <span class="note" style="flex:1 1 280px">整批匯入：CSV 欄位為 場次編號、日期時間（2026/10/17 07:00）、場地、輪次、客隊、主隊。隊名需與「球隊名單」相同；同編號的場次會更新。</span>
+            <label class="ghost" for="games-file" style="cursor:pointer">選擇 CSV 並匯入場次</label>
+            <input id="games-file" type="file" accept=".csv,.txt" hidden>
+          </div>
+        </form>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>賽程與比分</h2><span class="note">比分改完按 Enter 或離開欄位即儲存</span></div>
+        <div class="pb"><div class="tbl-wrap" style="max-height:none"><table>
+          <thead><tr><th>#</th><th>時間</th><th>場地</th><th>輪次</th><th>客隊</th><th class="num">比分</th><th>主隊</th><th>狀態</th><th></th></tr></thead>
+          <tbody id="game-rows"></tbody>
+        </table></div></div>
+      </div>
+    </section>
+
+    <!-- 成績統計 -->
+    <section class="tabpane" data-t="stats" hidden style="display:flex;flex-direction:column;gap:14px">
+      <style>.lead-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.lead{border:1px solid var(--rule);border-radius:8px;overflow:hidden}.lead h3{margin:0;padding:8px 12px;font-size:13px;background:var(--sunk);border-bottom:1px solid var(--rule)}.lead ol{margin:0;padding:6px 12px 8px 30px;font-size:13px}.lead li{padding:3px 0;display:flex;gap:8px}.lead li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lead li b{font-variant-numeric:tabular-nums}.lead li:first-child{font-weight:700}</style>
+      <div class="panel">
+        <div class="ph"><h2>預賽分組積分</h2><div class="inn-row" style="gap:6px"><a class="ghost sm" href="standings.html" target="_blank" rel="noopener" style="text-decoration:none">預賽排名看板 ›</a><button class="ghost" type="button" id="csv-std">複製 CSV</button></div></div>
+        <div class="pb"><div class="tbl-wrap" style="max-height:none"><table>
+          <thead><tr><th>組別</th><th class="num">排名</th><th>球隊</th><th class="num">場數</th><th class="num">勝</th><th class="num">和</th><th class="num">敗</th><th class="num">積分</th><th class="num">總失分</th><th class="num">總得分</th><th class="num">防守局數</th><th>名次依據</th></tr></thead>
+          <tbody id="std-rows"></tbody>
+        </table></div>
+        <p class="note" id="std-rule" style="margin:0">名次規則（秩序冊）：勝 3 分、和 1 分、敗 0 分；得分、失分、防守局數隨每局回報即時累計，勝和敗與積分在按下「比賽結束」後計入。積分相同依序比較：① 勝負關係（同分隊伍間的對戰）② 總失分少 ③ 總得分多 ④ 總防守局數多 ⑤ 抽籤。「名次依據」欄標示是哪一項分出高下。</p></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>各項指標排行榜</h2><span class="note" id="lead-note"></span></div>
+        <div class="pb"><div class="lead-grid" id="leaders"></div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>團隊打擊</h2><button class="ghost" type="button" id="csv-team">複製 CSV</button></div>
+        <div class="pb"><div class="tbl-wrap" style="max-height:none"><table>
+          <thead><tr id="team-head"></tr></thead><tbody id="team-rows"></tbody>
+        </table></div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>個人打擊成績</h2>
+          <div class="inn-row">
+            <select id="st-team" aria-label="球隊"></select>
+            <label class="note" for="st-min">最少打席 <input id="st-min" type="number" min="0" value="3" style="width:60px"></label>
+            <button class="ghost" type="button" id="csv-bat">複製 CSV</button>
+          </div>
+        </div>
+        <div class="pb">
+          <div class="tbl-wrap" style="max-height:560px"><table>
+            <thead><tr id="bat-head"></tr></thead>
+            <tbody id="bat-rows"></tbody>
+          </table></div>
+          <p class="note">打數不含四壞、高飛犧牲打。打擊率＝安打÷打數；上壘率＝(安打＋四壞)÷(打數＋四壞＋高犧)；長打率＝壘打數÷打數；OPS＝上壘率＋長打率；拉打率以界內落點計。排行榜只列打席數達門檻的球員。</p>
+          <textarea id="csv-fallback" hidden style="width:100%;height:120px;font:12px monospace"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- 紀錄表待匯入 -->
+    <section class="tabpane split" data-t="imports" hidden style="display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:14px;align-items:start">
+      <div class="panel">
+        <div class="ph"><h2>紀錄表上傳</h2><span class="note">紀錄員從<a href="sheet.html">打擊落點紀錄</a>按「上傳」後出現在這裡</span></div>
+        <div class="pb" id="shi-list" style="gap:8px"></div>
+      </div>
+      <div class="panel" id="shi-detail"><div class="pb"><p class="note">選左邊一份上傳的紀錄表，確認球員對應後按「匯入」。</p></div></div>
+    </section>
+
+    <!-- 歷史資料 -->
+    <section class="tabpane hist-pane" data-t="hist" hidden>
+      <div class="panel">
+        <div class="ph"><h2>歷史落點 CSV 匯入</h2><div class="inn-row" style="gap:6px"><button class="ghost" type="button" id="hx-tpl">下載範本</button><label class="primary" for="hx-file" style="cursor:pointer">選擇 CSV</label><input id="hx-file" type="file" accept=".csv,.txt" hidden></div></div>
+        <div class="pb">
+          <p class="note" id="hx-target" style="margin:0"></p>
+          <p class="note" style="margin:0">把過去的紙本紀錄整理成 CSV 一次匯入。欄位：日期、場次、隊伍、對手、先後攻、局、棒次、背號、姓名、結果、落點、打點（必填：日期、隊伍、背號或姓名、結果）。結果與落點用紀錄表代號，例如 1B、F、K、HR，落點 78、8D、108XD；三振、保送落點留空。沒有的球隊、場次與球員會自動建立；同一份檔案重複匯入不會重複。</p>
+          <div id="hx-preview" class="hx-preview"></div>
+          <div><b style="font-size:14px">已匯入的批次</b><div class="tbl-wrap" id="hx-batches" style="max-height:240px;margin-top:6px"></div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>球員跨屆對照</h2><div class="inn-row" style="gap:8px"><select id="xp-team" aria-label="球隊"></select><label class="note" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="xp-all">顯示全部</label></div></div>
+        <div class="pb">
+          <p class="note" id="xp-note" style="margin:0"></p>
+          <p class="note" style="margin:0">系統預設用「同隊（含別名）＋同姓名」把別屆的打席算給本屆球員。下面列出需要人工確認的情況：同名不只一位、或背號相同但姓名不同。按「是同一人」會把那一屆的資料算進來；按「不是」就排除。</p>
+          <div class="tbl-wrap" id="xp-list" style="max-height:520px"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>封存本屆與備份</h2><div class="inn-row" style="gap:6px"><button class="ghost" type="button" id="ar-csv">匯出打席 CSV</button><button class="ghost" type="button" id="ar-json">下載完整備份</button><button class="primary" type="button" id="ar-toggle">封存本屆</button></div></div>
+        <div class="pb">
+          <p style="margin:0" id="ar-state"></p>
+          <p class="note" style="margin:0">「匯出打席 CSV」和上方的匯入範本同格式，可以直接再匯入；「完整備份」包含球隊、名單、賽程、打席與上傳紀錄。建議每屆結束封存後，把兩個檔案存到社團雲端。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 紀錄員 -->
+    <section class="panel tabpane" data-t="users" hidden>
+      <div class="ph"><h2>帳號與權限</h2><span class="note">新紀錄員先到<a href="signup.html">紀錄員註冊頁</a>註冊，再於此開通</span></div>
+      <div class="pb"><div class="tbl-wrap" style="max-height:none"><table>
+        <thead><tr><th>姓名</th><th>Email</th><th>註冊時間</th><th>權限</th></tr></thead>
+        <tbody id="user-rows"></tbody>
+      </table></div></div>
+    </section>
+  </div>
+</div>
+
+<div class="confirm" id="confirm" hidden>
+  <div class="in"><span id="cf-msg" style="flex:1 1 240px"></span><button class="ghost" type="button" id="cf-no">取消</button><button class="btn-danger" type="button" id="cf-yes">確認刪除</button></div>
+</div>
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<script>
+'use strict';
+const LS = 'sb-admin-v1';
+const U = { tid: '', tab: 'tour', team: '', stTeam: 'all', sortK: 'ops', sortDir: -1 };
+try { Object.assign(U, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (_) {}
+const saveU = () => { try { localStorage.setItem(LS, JSON.stringify(U)); } catch (_) {} };
+let focusG = '';   // 從其他頁帶場次過來：直接開「賽程比分」並標出那一場
+{ const q = new URLSearchParams(location.search); if (q.get('t') && q.get('g')) { U.tid = q.get('t'); U.tab = 'games'; focusG = q.get('g'); history.replaceState(null, '', location.pathname); } }
+const D = { tournaments: [], teams: [], players: [], games: [], balls: [], users: [], uploads: [] };
+let unsub = [], newMode = false, opened = false;
+const teamName = id => (D.teams.find(t => t.id === id) || {}).name || '—';
+
+/* ---------- 確認列（取代瀏覽器 confirm） ---------- */
+function ask(msg, okLabel, fn) {
+  $('cf-msg').textContent = msg; $('cf-yes').textContent = okLabel || '確認刪除'; $('confirm').hidden = false;
+  $('cf-yes').onclick = async () => { $('confirm').hidden = true; try { await fn(); } catch (e) { toast(friendlyError(e)); } };
+  $('cf-yes').focus();
+}
+$('cf-no').onclick = () => $('confirm').hidden = true;
+
+/* ---------- 登入 ---------- */
+if (!FB.ready) $('setup').hidden = false;
+else FB.auth.onAuthStateChanged(async user => {
+  ['gate', 'denied', 'app', 'mast-bar', 'who'].forEach(id => $(id).hidden = true);
+  if (!user) { $('gate').hidden = false; return; }
+  $('who').hidden = false; $('who-email').textContent = user.email;
+  let role = 'pending'; try { role = await ensureUser(user); $('who-email').textContent = myName(); } catch (e) { toast(friendlyError(e)); }
+  if (role !== 'admin') { $('denied').hidden = false; return; }
+  $('app').hidden = false; $('mast-bar').hidden = false;
+  loadTournaments();
+  FB.db.collection('users').onSnapshot(s => { D.users = s.docs.map(d => ({ id: d.id, ...d.data() })); renderUsers(); });
+});
+$('login-form').addEventListener('submit', async e => {
+  e.preventDefault(); $('li-err').textContent = '';
+  try { await FB.auth.signInWithEmailAndPassword($('li-email').value.trim(), $('li-pass').value); } catch (err) { $('li-err').textContent = friendlyError(err); }
+});
+$('logout').onclick = () => { unsub.forEach(f => f()); FB.auth.signOut(); };
+
+/* ---------- 賽事 ---------- */
+function loadTournaments() {
+  FB.db.collection('tournaments').onSnapshot(s => {
+    D.tournaments = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')));
+    if (!D.tournaments.some(t => t.id === U.tid)) { U.tid = D.tournaments[0]?.id || ''; openTournament(); }
+    else if (!opened) openTournament();
+    opened = true;
+    $('sel-t').innerHTML = D.tournaments.length ? D.tournaments.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('') : '<option value="">尚無賽事</option>';
+    $('sel-t').value = U.tid;
+    if (!D.tournaments.length) newMode = true;
+    fillTourForm(); renderHist();
+  });
+}
+function openTournament() {
+  unsub.forEach(f => f()); unsub = []; D.teams = []; D.players = []; D.games = []; D.balls = []; D.uploads = [];
+  saveU(); renderAll();
+  if (!U.tid) return;
+  unsub.push(col(U.tid, 'teams').onSnapshot(s => { D.teams = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.group || '').localeCompare(String(b.group || '')) || a.name.localeCompare(b.name, 'zh')); renderAll(); }));
+  unsub.push(col(U.tid, 'players').onSnapshot(s => { D.players = s.docs.map(d => ({ id: d.id, ...d.data() })); renderRoster(); renderStats(); }));
+  unsub.push(col(U.tid, 'games').onSnapshot(s => { D.games = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.scheduledAt?.seconds || 0) - (b.scheduledAt?.seconds || 0)); renderGames(); renderStats(); }));
+  unsub.push(col(U.tid, 'balls').onSnapshot(s => { D.balls = s.docs.map(d => ({ id: d.id, ...d.data() })); renderStats(); renderImportDetail(); renderHist(); }, e => toast(friendlyError(e))));
+  unsub.push(col(U.tid, 'uploads').onSnapshot(s => { D.uploads = s.docs.map(d => ({ id: d.id, ...d.data() })); renderImports(); }, e => toast(friendlyError(e))));
+}
+$('sel-t').onchange = e => { U.tid = e.target.value; newMode = false; openTournament(); fillTourForm(); };
+function curTour() { return D.tournaments.find(t => t.id === U.tid); }
+function fillTourForm() {
+  const t = newMode ? null : curTour(), f = (t && t.field) || { preset: 'm', ...PRESETS.m };
+  $('tour-title').textContent = t ? '賽事設定' : '新增賽事';
+  $('tf-name').value = t ? t.name : ''; $('tf-start').value = t?.startDate || ''; $('tf-end').value = t?.endDate || ''; $('tf-book').value = t?.bookUrl || '';
+  $('tf-preset').value = f.preset || 'c'; ['L', 'C', 'B', 'P'].forEach(k => $('tf-' + k).value = f[k]);
+  $('tf-save').textContent = t ? '儲存' : '建立賽事'; $('tour-del').hidden = !t;
+}
+$('tour-new').onclick = () => { newMode = true; fillTourForm(); $('tf-name').focus(); };
+$('tf-preset').onchange = e => { const p = PRESETS[e.target.value]; if (p) ['L', 'C', 'B', 'P'].forEach(k => $('tf-' + k).value = p[k]); };
+['L', 'C', 'B', 'P'].forEach(k => $('tf-' + k).addEventListener('input', () => $('tf-preset').value = 'c'));
+$('tour-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const field = { preset: $('tf-preset').value }; ['L', 'C', 'B', 'P'].forEach(k => field[k] = +$('tf-' + k).value || PRESETS.m[k]);
+  const data = { name: $('tf-name').value.trim(), startDate: $('tf-start').value, endDate: $('tf-end').value, bookUrl: $('tf-book').value.trim(), field };
+  try {
+    if (newMode || !U.tid) { const ref = await FB.db.collection('tournaments').add({ ...data, createdAt: FB.TS() }); U.tid = ref.id; newMode = false; openTournament(); toast('已建立賽事'); }
+    else { await T(U.tid).update(data); toast('已儲存'); }
+  } catch (err) { toast(friendlyError(err)); }
+});
+$('tour-del').onclick = () => {
+  const t = curTour(); if (!t) return;
+  ask(`刪除「${t.name}」？球隊、名單、賽程與落點紀錄會一併刪除，無法復原。`, '確認刪除賽事', async () => {
+    for (const c of ['balls', 'players', 'games', 'teams']) await deleteAll(col(t.id, c));
+    await T(t.id).delete(); U.tid = ''; toast('已刪除賽事');
+  });
+};
+async function deleteAll(ref) {
+  const s = await ref.get();
+  for (let i = 0; i < s.docs.length; i += 400) { const b = FB.db.batch(); s.docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); }
+}
+
+/* ---------- 球隊名單 ---------- */
+function renderTeams() {
+  if (!D.teams.some(t => t.id === U.team)) U.team = D.teams[0]?.id || '';
+  $('team-count').textContent = `${D.teams.length} 隊`;
+  const cnt = id => D.players.filter(p => p.teamId === id).length, fem = id => D.players.filter(p => p.teamId === id && p.sex === 'F').length;
+  const q = ($('tm-q').value || '').trim(), shown = D.teams.filter(t => !q || t.name.includes(q));
+  const groups = [...new Set(shown.map(t => t.group || ''))].sort((a, b) => (a || '~').localeCompare(b || '~'));
+  $('team-list').innerHTML = !D.teams.length ? '<div class="empty-state"><b>還沒有球隊</b>按「＋ 新增」或「匯入 CSV」</div>'
+    : !shown.length ? '<div class="empty-state">找不到符合的球隊</div>'
+    : groups.map(g => `<div class="grp">${g ? esc(g) + ' 組' : '未分組'}</div>` + shown.filter(t => (t.group || '') === g).map(t => `<button type="button" data-id="${t.id}" aria-current="${t.id === U.team}"><span>${esc(t.name)}</span><span class="note">${cnt(t.id)} 人${fem(t.id) ? `・女 ${fem(t.id)}` : ''}</span></button>`).join('')).join('');
+  $('team-sel').innerHTML = D.teams.length ? [...new Set(D.teams.map(t => t.group || ''))].sort().map(g => `<optgroup label="${g ? esc(g) + ' 組' : '未分組'}">` + D.teams.filter(t => (t.group || '') === g).map(t => `<option value="${t.id}" ${t.id === U.team ? 'selected' : ''}>${esc(t.name)}（${cnt(t.id)} 人）</option>`).join('') + '</optgroup>').join('') : '<option>尚無球隊</option>';
+  const opts = '<option value="">選擇球隊</option>' + D.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  const ga = $('gf-away').value, gh = $('gf-home').value; $('gf-away').innerHTML = opts; $('gf-home').innerHTML = opts; $('gf-away').value = ga; $('gf-home').value = gh;
+  const st = U.stTeam; $('st-team').innerHTML = '<option value="all">全部球隊</option>' + D.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join(''); $('st-team').value = D.teams.some(t => t.id === st) ? st : 'all';
+}
+let rosterPending = false;
+function renderRoster() {
+  renderTeams();
+  const t = D.teams.find(x => x.id === U.team);
+  $('roster-title').textContent = t ? t.name : '';
+  $('roster-pane').hidden = !t; $('team-edit').style.visibility = t ? '' : 'hidden'; $('team-del').hidden = $('imp-toggle').hidden = !t;
+  if (t && document.activeElement !== $('te-name')) $('te-name').value = t.name;
+  if (t && document.activeElement !== $('te-group')) $('te-group').value = t.group || '';
+  if (t && document.activeElement !== $('te-alias')) $('te-alias').value = (t.aliases || []).join('、');
+  if ($('roster-rows').contains(document.activeElement)) { rosterPending = true; return; }
+  rosterPending = false;
+  const R = D.players.filter(p => p.teamId === U.team).sort((a, b) => (+a.no || 999) - (+b.no || 999));
+  const hs = v => ['R', 'L', 'S'].map(k => `<option value="${k}" ${(v || 'R') === k ? 'selected' : ''}>${HAND[k]}</option>`).join('');
+  $('roster-rows').innerHTML = R.length ? R.map(p => `<tr data-id="${p.id}" class="${p.sex === 'F' ? 'fem' : ''}"><td><input data-k="no" inputmode="numeric" value="${esc(p.no)}" aria-label="背號"></td><td><input data-k="name" value="${esc(p.name)}" aria-label="姓名"></td><td><select data-k="sex" aria-label="性別"><option value="" ${!p.sex ? 'selected' : ''}>—</option><option value="M" ${p.sex === 'M' ? 'selected' : ''}>男</option><option value="F" ${p.sex === 'F' ? 'selected' : ''}>女</option></select></td><td><select data-k="bats" aria-label="打擊">${hs(p.bats)}</select></td><td><button class="del" type="button" data-id="${p.id}" aria-label="刪除球員">×</button></td></tr>`).join('')
+    : '<tr><td colspan="5" class="empty">尚無球員，用最下方一列新增，或在下方貼上名單匯入</td></tr>';
+}
+$('team-list').addEventListener('click', e => { const id = e.target.closest('button')?.dataset.id; if (id) { U.team = id; saveU(); renderRoster(); } });
+$('team-sel').onchange = e => { U.team = e.target.value; saveU(); renderRoster(); };
+$('tm-q').oninput = () => renderTeams();
+$('tm-toggle').onclick = () => { const f = $('team-form'); f.hidden = !f.hidden; $('tm-toggle').textContent = f.hidden ? '＋ 新增' : '取消'; if (!f.hidden) $('tm-name').focus(); };
+$('imp-toggle').onclick = () => { $('imp-box').hidden = !$('imp-box').hidden; if (!$('imp-box').hidden) $('imp-text').focus(); };
+$('imp-cancel').onclick = () => { $('imp-text').value = ''; $('imp-box').hidden = true; };
+$('team-form').addEventListener('submit', async e => {
+  e.preventDefault(); const name = $('tm-name').value.trim(); if (!name) return;
+  if (D.teams.some(t => t.name === name)) { toast('已有同名球隊'); return; }
+  try { const ref = await col(U.tid, 'teams').add({ name, group: $('tm-group').value.trim() }); U.team = ref.id; $('tm-name').value = ''; $('tm-group').value = ''; $('team-form').hidden = true; $('tm-toggle').textContent = '＋ 新增'; toast(`已新增 ${name}`); } catch (err) { toast(friendlyError(err)); }
+});
+/* 隊名、組別：直接編輯，離開欄位自動儲存 */
+let savedT;
+function flashSaved(m = '已儲存') { $('te-saved').textContent = '✓ ' + m; clearTimeout(savedT); savedT = setTimeout(() => $('te-saved').textContent = '', 2000); }
+async function saveTeamField(k) {
+  const t = D.teams.find(x => x.id === U.team); if (!t) return;
+  const el = k === 'name' ? $('te-name') : $('te-group'), v = el.value.trim();
+  if ((t[k] || '') === v) return;
+  if (k === 'name' && !v) { el.value = t.name; toast('隊名不可空白'); return; }
+  if (k === 'name' && D.teams.some(x => x.id !== t.id && x.name === v)) { el.value = t.name; toast('已有同名球隊'); return; }
+  try { await col(U.tid, 'teams').doc(t.id).update({ [k]: v }); t[k] = v; flashSaved(); renderTeams(); } catch (err) { el.value = t[k] || ''; toast(friendlyError(err)); }
+}
+$('te-alias').addEventListener('change', async () => {
+  const t = D.teams.find(x => x.id === U.team); if (!t) return;
+  const v = [...new Set($('te-alias').value.split(/[,，、;；\n]+/).map(x => x.trim()).filter(x => x && x !== t.name))];
+  if (v.join('|') === (t.aliases || []).join('|')) return;
+  try { await col(U.tid, 'teams').doc(t.id).update({ aliases: v }); t.aliases = v; $('te-alias').value = v.join('、'); flashSaved(v.length ? `已儲存別名：${v.join('、')}` : '已清除別名'); } catch (err) { toast(friendlyError(err)); }
+});
+$('te-alias').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+['te-name', 'te-group'].forEach(id => {
+  $(id).addEventListener('change', () => saveTeamField(id === 'te-name' ? 'name' : 'group'));
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { const t = D.teams.find(x => x.id === U.team); e.target.value = id === 'te-name' ? t?.name || '' : t?.group || ''; e.target.blur(); } });
+});
+/* 球員：表格內直接編輯 */
+const normNo = v => String(v ?? '').trim().replace(/^0+(?=\d)/, '');
+$('roster-rows').addEventListener('change', async e => {
+  const k = e.target.dataset.k, tr = e.target.closest('tr[data-id]'); if (!k || !tr) return;
+  const p = D.players.find(x => x.id === tr.dataset.id); if (!p) return;
+  let v = e.target.value.trim();
+  if (k === 'no') {
+    v = normNo(v);
+    if (!v) { e.target.value = p.no; toast('背號不可空白'); return; }
+    const dup = D.players.find(x => x.id !== p.id && x.teamId === p.teamId && normNo(x.no) === v);
+    if (dup) { e.target.classList.add('bad'); toast(`#${v} 已是 ${dup.name} 的背號`); e.target.value = p.no; setTimeout(() => e.target.classList.remove('bad'), 1500); return; }
+  }
+  if (k === 'name' && !v) { e.target.value = p.name; toast('姓名不可空白'); return; }
+  if ((p[k] || (k === 'bats' ? 'R' : '')) === v) return;
+  if (k === 'sex') e.target.closest('tr').classList.toggle('fem', v === 'F');
+  try { await col(U.tid, 'players').doc(p.id).update({ [k]: v }); p[k] = v; flashSaved(`已儲存 #${p.no} ${p.name}`); } catch (err) { toast(friendlyError(err)); }
+});
+$('roster-rows').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+  e.preventDefault(); const td = e.target.closest('td'), idx = [...td.parentNode.children].indexOf(td);
+  const nx = e.target.closest('tr').nextElementSibling?.children[idx]?.querySelector('input'); e.target.blur(); (nx || $('np-no')).focus();
+});
+$('roster-rows').addEventListener('focusout', () => setTimeout(() => { if (rosterPending && !$('roster-rows').contains(document.activeElement)) renderRoster(); }, 0));
+async function addPlayer() {
+  const t = D.teams.find(x => x.id === U.team); if (!t) return;
+  const no = normNo($('np-no').value), name = $('np-name').value.trim();
+  if (!no || !name) { toast('請輸入背號與姓名'); (no ? $('np-name') : $('np-no')).focus(); return; }
+  const dup = D.players.find(x => x.teamId === t.id && normNo(x.no) === no);
+  if (dup) { toast(`#${no} 已是 ${dup.name} 的背號`); $('np-no').focus(); return; }
+  try { await col(U.tid, 'players').add({ teamId: t.id, no, name, sex: $('np-sex').value, bats: $('np-bats').value }); $('np-no').value = ''; $('np-name').value = ''; $('np-bats').value = 'R'; $('np-sex').value = 'M'; flashSaved(`已新增 #${no} ${name}`); $('np-no').focus(); } catch (err) { toast(friendlyError(err)); }
+}
+$('np-add').onclick = addPlayer;
+['np-no', 'np-name'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); id === 'np-no' && !$('np-name').value.trim() ? $('np-name').focus() : addPlayer(); } }));
+$('team-del').onclick = () => {
+  const t = D.teams.find(x => x.id === U.team); if (!t) return;
+  if (D.games.some(g => g.homeId === t.id || g.awayId === t.id)) { toast('此隊已排入賽程，請先刪除相關場次'); return; }
+  ask(`刪除「${t.name}」及其名單？`, '確認刪除', async () => {
+    const b = FB.db.batch(); D.players.filter(p => p.teamId === t.id).forEach(p => b.delete(col(U.tid, 'players').doc(p.id)));
+    b.delete(col(U.tid, 'teams').doc(t.id)); await b.commit(); toast('已刪除球隊');
+  });
+};
+$('roster-rows').addEventListener('click', e => {
+  const id = e.target.closest('.del')?.dataset.id; if (!id) return;
+  const p = D.players.find(x => x.id === id);
+  ask(`刪除球員 #${p.no} ${p.name}？已記錄的落點會保留。`, '確認刪除', () => col(U.tid, 'players').doc(id).delete());
+});
+$('imp-file').onchange = e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('imp-text').value = String(rd.result).replace(/^﻿/, ''); toast(`已讀入 ${f.name}，確認後按「匯入」`); }; rd.readAsText(f, 'utf-8'); e.target.value = ''; };
+$('games-file').onchange = e => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  if (!U.tid) { toast('請先到「賽事」分頁建立賽事，再匯入'); return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    const lines = String(rd.result).replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
+    const head = lines.shift().split(',').map(x => x.trim());
+    const ix = k => head.indexOf(k), iNo = ix('場次編號'), iDT = ix('日期時間'), iF = ix('場地'), iR = ix('輪次'), iA = ix('客隊'), iH = ix('主隊');
+    if (iDT < 0 || iA < 0 || iH < 0) { toast('CSV 需要「日期時間、客隊、主隊」欄位'); return; }
+    const byName = new Map(D.teams.map(t => [t.name, t.id])), rows = [], missing = new Set();
+    for (const l of lines) {
+      const c = l.split(',').map(x => x.trim().replace(/^"|"$/g, ''));
+      const a = byName.get(c[iA]), h = byName.get(c[iH]);
+      if (!a) missing.add(c[iA]); if (!h) missing.add(c[iH]);
+      const dt = parseTPE(c[iDT]);
+      if (a && h && !isNaN(dt)) rows.push({ gameNo: iNo >= 0 ? c[iNo] : '', scheduledAt: firebase.firestore.Timestamp.fromDate(dt), field: iF >= 0 ? c[iF] : '', round: iR >= 0 ? c[iR] : '', awayId: a, homeId: h });
+    }
+    if (missing.size) { toast(`找不到球隊：${[...missing].slice(0, 3).join('、')}${missing.size > 3 ? ' 等' : ''}，請先匯入球隊名單`); return; }
+    if (!rows.length) { toast('沒有讀到場次'); return; }
+    ask(`將匯入 ${rows.length} 個場次到「${(curTour() || {}).name || ''}」。`, '確認匯入', async () => {
+      let add = 0, upd = 0; const ops = [];
+      for (const g of rows) {
+        const ex = g.gameNo && D.games.find(x => String(x.gameNo) === String(g.gameNo));
+        if (ex) { ops.push(b => b.update(col(U.tid, 'games').doc(ex.id), g)); upd++; }
+        else { ops.push(b => b.set(col(U.tid, 'games').doc(), { ...g, awayScore: null, homeScore: null, status: 'scheduled', createdAt: FB.TS() })); add++; }
+      }
+      for (let i = 0; i < ops.length; i += 400) { const b = FB.db.batch(); ops.slice(i, i + 400).forEach(f => f(b)); await b.commit(); }
+      toast(`新增 ${add} 場${upd ? `、更新 ${upd} 場` : ''}`);
+    });
+  };
+  rd.readAsText(f, 'utf-8');
+};
+$('bulk-file').onchange = e => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  if (!U.tid) { toast('請先到「賽事」分頁建立賽事，再匯入'); return; }
+  const rd = new FileReader();
+  rd.onload = async () => {
+    const lines = String(rd.result).replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
+    const head = lines.shift().split(',').map(x => x.trim());
+    const ix = k => head.indexOf(k), iT = ix('球隊'), iN = ix('背號'), iM = ix('姓名'), iH = ix('左右打'), iG = ix('組別'), iS = ix('性別'); const grp = {};
+    if (iT < 0 || iN < 0 || iM < 0) { toast('CSV 需要「球隊、背號、姓名」三個欄位'); return; }
+    const hand = h => /左右|兩|S/i.test(h) ? 'S' : /左|L/i.test(h) ? 'L' : 'R';
+    const byTeam = new Map();
+    for (const l of lines) {
+      const c = l.split(',').map(x => x.trim().replace(/^"|"$/g, ''));
+      if (!c[iT] || !c[iM]) continue;
+      if (!byTeam.has(c[iT])) byTeam.set(c[iT], []);
+      if (iG >= 0 && c[iG]) grp[c[iT]] = c[iG];
+      byTeam.get(c[iT]).push({ no: c[iN] || '', name: c[iM], bats: iH >= 0 && c[iH] ? hand(c[iH]) : null, sex: iS >= 0 ? sexOf(c[iS]) : '' });
+    }
+    ask(`將匯入 ${byTeam.size} 隊、${[...byTeam.values()].reduce((a, b) => a + b.length, 0)} 位球員到「${(curTour() || {}).name || ''}」。同隊同背號會更新姓名。`, '確認匯入', async () => {
+      let newT = 0, add = 0, upd = 0, ops = [];
+      for (const [tn, list] of byTeam) {
+        let t = D.teams.find(x => x.name === tn), tid;
+        if (t) { tid = t.id; if (grp[tn] && t.group !== grp[tn]) ops.push(b => b.update(col(U.tid, 'teams').doc(tid), { group: grp[tn] })); } else { const ref = col(U.tid, 'teams').doc(); tid = ref.id; ops.push(b => b.set(ref, { name: tn, group: grp[tn] || '' })); newT++; }
+        for (const p of list) {
+          const ex = D.players.find(x => x.teamId === tid && p.no && String(x.no) === p.no);
+          if (ex) { const patch = { name: p.name }; if (p.bats) patch.bats = p.bats; if (p.sex) patch.sex = p.sex; ops.push(b => b.update(col(U.tid, 'players').doc(ex.id), patch)); upd++; }
+          else { const d = { teamId: tid, no: p.no, name: p.name, bats: p.bats || 'R', sex: p.sex || '' }; ops.push(b => b.set(col(U.tid, 'players').doc(), d)); add++; }
+        }
+      }
+      for (let i = 0; i < ops.length; i += 400) { const b = FB.db.batch(); ops.slice(i, i + 400).forEach(f => f(b)); await b.commit(); }
+      toast(`已建立 ${newT} 隊、新增 ${add} 人${upd ? `、更新 ${upd} 人` : ''}`);
+    });
+  };
+  rd.readAsText(f, 'utf-8');
+};
+$('imp-go').onclick = async () => {
+  const list = parseRoster($('imp-text').value); if (!list.length) { toast('沒有讀到球員，請確認每行有背號與姓名'); return; }
+  const b = FB.db.batch(); let add = 0, upd = 0;
+  for (const p of list) {
+    const ex = D.players.find(x => x.teamId === U.team && String(x.no) === p.no);
+    if (ex) { b.update(col(U.tid, 'players').doc(ex.id), Object.assign({ name: p.name, bats: p.bats }, p.sex ? { sex: p.sex } : {})); upd++; }
+    else { b.set(col(U.tid, 'players').doc(), { teamId: U.team, ...p }); add++; }
+  }
+  try { await b.commit(); $('imp-text').value = ''; $('imp-box').hidden = true; toast(`新增 ${add} 人${upd ? `、更新 ${upd} 人` : ''}`); } catch (err) { toast(friendlyError(err)); }
+};
+
+/* ---------- 賽程比分 ---------- */
+function renderGames() {
+  $('game-rows').innerHTML = D.games.length ? D.games.map(g => `<tr data-id="${g.id}">
+    <td>${esc(g.gameNo || '')}</td><td>${fmtDT(g.scheduledAt)}</td><td>${esc(g.field || '')}</td><td>${esc(g.round || '')}</td>
+    <td>${esc(teamName(g.awayId))}</td>
+    <td class="num" style="white-space:nowrap"><input class="inline-edit" type="number" min="0" data-k="awayScore" value="${g.awayScore ?? ''}" aria-label="客隊得分"> : <input class="inline-edit" type="number" min="0" data-k="homeScore" value="${g.homeScore ?? ''}" aria-label="主隊得分"></td>
+    <td>${esc(teamName(g.homeId))}</td>
+    <td><select data-k="status" aria-label="狀態">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${g.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+    <td><button class="del" type="button" aria-label="刪除場次">×</button></td></tr>`).join('')
+    : '<tr><td colspan="9" class="empty">尚無場次</td></tr>';
+  if (focusG) { const tr = document.querySelector(`#game-rows tr[data-id="${focusG}"]`); if (tr) { tr.classList.add('focus'); setTimeout(() => tr.scrollIntoView({ block: 'center' }), 60); } }
+}
+$('game-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const away = $('gf-away').value, home = $('gf-home').value;
+  if (!away || !home || away === home) { toast('請選擇兩支不同的球隊'); return; }
+  const dt = parseTPE($('gf-dt').value);
+  try {
+    await col(U.tid, 'games').add({ gameNo: $('gf-no').value.trim(), scheduledAt: firebase.firestore.Timestamp.fromDate(dt), field: $('gf-field').value.trim(), round: $('gf-round').value.trim(), awayId: away, homeId: home, awayScore: null, homeScore: null, status: 'scheduled', createdAt: FB.TS() });
+    $('gf-no').value = ''; toast('已新增場次');
+  } catch (err) { toast(friendlyError(err)); }
+});
+$('game-rows').addEventListener('change', e => {
+  const tr = e.target.closest('tr[data-id]'), k = e.target.dataset.k; if (!tr || !k) return;
+  const v = k === 'status' ? e.target.value : (e.target.value === '' ? null : Math.max(0, +e.target.value));
+  col(U.tid, 'games').doc(tr.dataset.id).update({ [k]: v, updatedAt: FB.TS() }).then(() => toast('已儲存'), err => toast(friendlyError(err)));
+});
+$('game-rows').addEventListener('click', e => {
+  if (!e.target.closest('.del')) return;
+  const id = e.target.closest('tr').dataset.id, g = D.games.find(x => x.id === id), n = D.balls.filter(b => b.gameId === id).length;
+  ask(`刪除場次 ${teamName(g.awayId)} vs ${teamName(g.homeId)}？${n ? `此場 ${n} 筆落點紀錄也會一併刪除。` : ''}`, '確認刪除', async () => {
+    await deleteAll(col(U.tid, 'balls').where('gameId', '==', id)); await col(U.tid, 'games').doc(id).delete(); toast('已刪除場次');
+  });
+});
+
+/* ---------- 成績統計 ---------- */
+const BAT_COLS = [['no', '背號', 0], ['name', '姓名', 0], ['team', '球隊', 0], ['g', '出賽', 1], ['pa', '打席', 1], ['ab', '打數', 1], ['h', '安打', 1], ['2B', '二安', 1], ['3B', '三安', 1], ['HR', '全壘打', 1], ['tb', '壘打數', 1], ['BB', '四壞', 1], ['K', '三振', 1], ['SF', '高犧', 1], ['avg', '打擊率', 1], ['obp', '上壘率', 1], ['slg', '長打率', 1], ['ops', 'OPS', 1], ['pullPct', '拉打率', 1]];
+const TEAM_COLS = [['team', '球隊', 0], ['g', '場數', 1], ['pa', '打席', 1], ['ab', '打數', 1], ['h', '安打', 1], ['HR', '全壘打', 1], ['BB', '四壞', 1], ['K', '三振', 1], ['avg', '打擊率', 1], ['obp', '上壘率', 1], ['slg', '長打率', 1], ['ops', 'OPS', 1]];
+const RATE = new Set(['avg', 'obp', 'slg', 'ops']);
+const cell = (r, k) => k === 'pullPct' ? (r.fair ? pct(r.pullPct, 0) : '—') : RATE.has(k) ? (r.ab || r.pa ? fmt3(r[k]) : '—') : esc(r[k] ?? '');
+let batRows = [], stdRows = [], teamRows = [];
+function renderStats() {
+  const FD = makeField(curTour()?.field);
+  stdRows = standings(D.teams, D.games, { live: true });
+  $('std-rows').innerHTML = stdRows.length ? stdRows.map((r, k) => `<tr${k && stdRows[k - 1].group !== r.group ? ' style="border-top:2px solid var(--line)"' : ''}><td>${esc(r.group)}</td><td class="num"><b>${r.rank}</b></td><td>${esc(r.name)}</td><td class="num">${r.g}</td><td class="num">${r.w}</td><td class="num">${r.d}</td><td class="num">${r.l}</td><td class="num"><b>${r.pts}</b></td><td class="num">${r.ra}</td><td class="num">${r.rs}</td><td class="num">${r.def}</td><td>${r.basis ? `<span class="basis ${r.basis === '需抽籤' ? 'lot' : ''}">${r.basis}</span>` : ''}${r.live ? ` <span class="note">（${r.live} 場進行中）</span>` : ''}</td></tr>`).join('')
+    : '<tr><td colspan="12" class="empty">尚無球隊</td></tr>';
+  $('std-rule').hidden = !stdRows.length;
+  const pm = new Map(D.players.map(p => [p.id, p])), min = +$('st-min').value || 0;
+  const all = battingTable(D.balls, FD).map(r => { const p = pm.get(r.batterId); return Object.assign(r, { no: p?.no ?? r.no, name: p?.name ?? r.name, team: teamName(r.teamId) }); });
+  batRows = all.filter(r => (U.stTeam === 'all' || r.teamId === U.stTeam) && r.pa >= min);
+  const k = U.sortK, dir = U.sortDir;
+  const srt = (rows) => rows.sort((a, b) => (typeof a[k] === 'string' ? a[k].localeCompare(b[k], 'zh', { numeric: true }) : (a[k] ?? 0) - (b[k] ?? 0)) * dir || b.pa - a.pa);
+  srt(batRows);
+  $('bat-head').innerHTML = BAT_COLS.map(([key, l, n]) => `<th class="sort ${n ? 'num' : ''}" data-k="${key}" ${key === k ? 'aria-sort="' + (dir < 0 ? 'descending' : 'ascending') + '"' : ''}>${l}</th>`).join('');
+  $('bat-rows').innerHTML = batRows.length ? batRows.map(r => `<tr>${BAT_COLS.map(([key, , n]) => `<td class="${n ? 'num' : ''}">${cell(r, key)}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${BAT_COLS.length}" class="empty">尚無符合條件的打者（打擊落點紀錄上傳並匯入後會出現在這裡）</td></tr>`;
+  // 團隊打擊
+  teamRows = teamBatting(D.balls, FD).map(r => Object.assign(r, { team: teamName(r.teamId) })).sort((a, b) => b.ops - a.ops);
+  $('team-head').innerHTML = TEAM_COLS.map(([, l, n]) => `<th class="${n ? 'num' : ''}">${l}</th>`).join('');
+  $('team-rows').innerHTML = teamRows.length ? teamRows.map(r => `<tr>${TEAM_COLS.map(([key, , n]) => `<td class="${n ? 'num' : ''}">${cell(r, key)}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${TEAM_COLS.length}" class="empty">尚無資料</td></tr>`;
+  // 排行榜
+  const q = all.filter(r => r.pa >= min);
+  const board = (title, key, rows, rate) => {
+    const top = [...rows].filter(r => rate ? (key === 'obp' ? r.ab + r.BB + r.SF > 0 : key === 'ops' ? r.pa > 0 : r.ab > 0) : r[key] > 0).sort((a, b) => b[key] - a[key] || b.pa - a.pa).slice(0, 5);
+    return `<div class="lead"><h3>${title}</h3><ol>${top.length ? top.map(r => `<li><span>${esc(r.name)}<small class="note">　${esc(r.team)}</small></span><b>${rate ? fmt3(r[key]) : r[key]}</b></li>`).join('') : '<li><span class="note">尚無資料</span></li>'}</ol></div>`;
+  };
+  $('lead-note').textContent = `打擊率、上壘率、長打率、OPS 限打席 ≥ ${min}`;
+  $('leaders').innerHTML = board('打擊率', 'avg', q, 1) + board('全壘打', 'HR', all) + board('安打', 'h', all) + board('上壘率', 'obp', q, 1) + board('長打率', 'slg', q, 1) + board('OPS', 'ops', q, 1) + board('壘打數', 'tb', all) + board('四壞', 'BB', all);
+}
+$('bat-head').addEventListener('click', e => { const k = e.target.closest('th')?.dataset.k; if (!k) return; U.sortDir = U.sortK === k ? -U.sortDir : (['no', 'name', 'team'].includes(k) ? 1 : -1); U.sortK = k; saveU(); renderStats(); });
+$('st-team').onchange = e => { U.stTeam = e.target.value; saveU(); renderStats(); };
+$('st-min').oninput = renderStats;
+$('csv-std').onclick = () => copyText(toCSV([['組別', '排名', '球隊', '場數', '勝', '和', '敗', '積分', '總失分', '總得分', '防守局數', '名次依據'], ...stdRows.map(r => [r.group, r.rank, r.name, r.g, r.w, r.d, r.l, r.pts, r.ra, r.rs, r.def, r.basis])]), $('csv-fallback'), '已複製戰績，可貼到 Excel');
+const raw = (r, k) => k === 'pullPct' ? (r.fair ? Math.round(r.pullPct * 100) + '%' : '') : RATE.has(k) ? r[k].toFixed(3) : r[k];
+$('csv-bat').onclick = () => copyText(toCSV([BAT_COLS.map(c => c[1]), ...batRows.map(r => BAT_COLS.map(([k]) => raw(r, k)))]), $('csv-fallback'), '已複製個人成績，可貼到 Excel');
+$('csv-team').onclick = () => copyText(toCSV([TEAM_COLS.map(c => c[1]), ...teamRows.map(r => TEAM_COLS.map(([k]) => raw(r, k)))]), $('csv-fallback'), '已複製團隊成績，可貼到 Excel');
+
+
+/* ---------- 紀錄表待匯入（打擊落點紀錄上傳 → 系統打席） ---------- */
+const IM = { sel: '', map: {} };
+const UPS = { pending: ['待匯入', 'pending'], imported: ['已匯入', 'final'], rejected: ['已退回', ''] };
+function upPayload(u) { try { return JSON.parse(u.payload || '{}'); } catch (_) { return {}; } }
+function renderImports() {
+  const list = [...(D.uploads || [])].sort((a, b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1) || (b.at || 0) - (a.at || 0));
+  const np = list.filter(u => u.status === 'pending').length; $('shi-badge').hidden = !np; $('shi-badge').textContent = np;
+  const newest = {}; list.forEach(u => { const k = u.gameId + '|' + u.teamId; if (!newest[k] || (u.at || 0) > (newest[k].at || 0)) newest[k] = u; });
+  $('shi-list').innerHTML = list.length ? list.map(u => { const g = D.games.find(x => x.id === u.gameId) || {}, st = UPS[u.status] || [u.status, ''], old = newest[u.gameId + '|' + u.teamId] !== u;
+    return `<button type="button" class="imp-card" data-id="${u.id}" aria-current="${u.id === IM.sel}"><b>第 ${esc(g.gameNo || u.gameNo || '')} 場｜${esc(teamName(u.teamId))}（${u.side === 'away' ? '先攻' : '後攻'}）</b>
+      <span>${u.paCount || 0} 個打席・得 ${u.runs || 0} 分　<span class="badge ${st[1]}">${st[0]}</span>${old ? ' <span class="badge">有較新版本</span>' : ''}</span>
+      <span class="note">${esc(u.createdByName || '')}・${fmtDT(u.createdAt)}${u.note ? '・' + esc(u.note) : ''}</span></button>`; }).join('') : '<p class="note">還沒有紀錄員上傳紀錄表。</p>';
+  renderImportDetail();
+}
+$('shi-list').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; IM.sel = b.dataset.id; IM.map = {}; renderImports(); });
+function impCtx(u) {
+  const roster = D.players.filter(p => p.teamId === u.teamId);
+  const P = upPayload(u), byNo = {};
+  (P.lineup || []).forEach(l => { if (l.pid && D.players.some(p => p.id === l.pid)) byNo[l.no] = l.pid; });   // 紀錄表上已選好的球員優先
+  const idOf = no => { if (no == null || no === '') return ''; if (IM.map[no] !== undefined) return IM.map[no]; if (byNo[no]) return byNo[no]; const c = roster.filter(p => String(p.no) === String(no)); return c.length === 1 ? c[0].id : ''; };
+  return { roster, idOf };
+}
+function renderImportDetail() {
+  const u = (D.uploads || []).find(x => x.id === IM.sel), box = $('shi-detail');
+  if (!u) { box.innerHTML = '<div class="pb"><p class="note">選左邊一份上傳的紀錄表，確認球員對應後按「匯入」。</p></div>'; return; }
+  const P = upPayload(u), g = D.games.find(x => x.id === u.gameId), { roster, idOf } = impCtx(u);
+  const lineNos = [...new Set((P.lineup || []).map(l => l.no))], runNos = [...new Set((P.pas || []).flatMap(pa => (pa.scorers || [])).filter(no => !lineNos.includes(no)))];
+  const batNos = new Set((P.pas || []).map(pa => pa.no)), missBat = [...batNos].filter(no => !idOf(no));
+  const exist = D.balls.filter(b => b.gameId === u.gameId && b.teamId === u.teamId);
+  const inn = P.innings || [], other = g ? ((g.innings || {})[u.side === 'away' ? 'home' : 'away'] || []) : [];
+  const opt = (no, cur) => `<select data-no="${esc(no)}"><option value="">— 未對應 —</option>${roster.sort((a, b) => (+a.no || 0) - (+b.no || 0)).map(p => `<option value="${p.id}"${p.id === cur ? ' selected' : ''}>#${esc(p.no)} ${esc(p.name)}</option>`).join('')}</select>`;
+  const slotOf = no => (P.lineup || []).filter(l => l.no === no).map(l => l.slot + (l.sub ? '（替）' : '')).join('、');
+  box.innerHTML = `<div class="ph"><h2>第 ${esc((g && g.gameNo) || u.gameNo || '')} 場｜${esc(teamName(u.teamId))}（${u.side === 'away' ? '先攻' : '後攻'}）</h2><span class="badge ${(UPS[u.status] || [])[1] || ''}">${(UPS[u.status] || [u.status])[0]}</span></div>
+  <div class="pb">
+    ${!g ? '<div class="imp-warn">找不到這個場次（可能已被刪除），無法匯入。</div>' : ''}
+    <div class="note">上傳：${esc(u.createdByName || '')}・${fmtDT(u.createdAt)}　紀錄表：${esc(P.head?.team || '')} ${esc(P.head?.date || '')} ${esc(P.head?.field || '')}${P.head?.weather ? '・' + esc(P.head.weather) : ''}${P.head?.wind ? '・' + esc(P.head.wind) : ''}</div>
+    <div><b>本隊逐局得分</b>（合計 ${inn.reduce((a, b) => a + b, 0)}）<div class="imp-line" style="margin-top:4px">${inn.map((v, i) => `<span>${i + 1}局 <b>${v}</b></span>`).join('') || '<span>—</span>'}</div>
+      ${g ? `<div class="note" style="margin-top:4px">對手目前逐局：${other.map((v, i) => `${i + 1}局 ${v ?? '—'}`).join('｜') || '尚無'}。匯入只更新本隊這一半，對手那一半由對手的紀錄表或手動填寫。</div>` : ''}</div>
+    <div><b>球員對應</b> <span class="note">依背號自動對到「${esc(teamName(u.teamId))}」名單；對不到的請選人，或先到「球隊名單」補上再回來</span>
+      <div class="tbl-wrap" style="max-height:none;margin-top:6px"><table class="imp-map"><thead><tr><th>背號</th><th>棒次</th><th>對應球員</th></tr></thead><tbody>
+      ${lineNos.map(no => `<tr><td>#${esc(no)}</td><td>${slotOf(no)}</td><td>${opt(no, idOf(no))}${!idOf(no) && batNos.has(no) ? ' <span class="badge pending">必填</span>' : ''}</td></tr>`).join('')}
+      ${runNos.map(no => `<tr><td>#${esc(no)}</td><td>代跑</td><td>${opt(no, idOf(no))}${idOf(no) ? '' : ' <span class="note">不在名單：得分只算在全隊</span>'}</td></tr>`).join('')}
+      </tbody></table></div></div>
+    <details><summary><b>打席明細</b>（${(P.pas || []).length} 筆）</summary><div class="tbl-wrap" style="max-height:340px;margin-top:6px"><table class="imp-pa"><thead><tr><th>局</th><th>輪</th><th>棒次</th><th>背號</th><th>落點</th><th>結果</th><th>打點</th><th>回本壘</th></tr></thead><tbody>
+      ${(P.pas || []).map(pa => `<tr><td>${pa.inn}</td><td>${pa.round}</td><td>${pa.slot}${pa.sub ? '替' : ''}</td><td>#${esc(pa.no)}</td><td>${esc(pa.zone || '—')}</td><td>${esc(pa.res)}${pa.pr ? ` <span class="badge">PR#${esc(pa.pr.no)}</span>` : ''}</td><td>${pa.rbi || ''}</td><td>${(pa.scorers || []).map(n => '#' + esc(n)).join('、')}</td></tr>`).join('')}
+    </tbody></table></div></details>
+    ${exist.length ? `<div class="imp-warn">這一隊在本場已經有 <b>${exist.length}</b> 筆打席紀錄（${exist.some(b => b.source !== 'sheet') ? '含後台資訊中控頁記錄' : '先前匯入'}）。匯入會<b>取代</b>這些紀錄，並更新本隊打擊順序與逐局得分。</div>` : ''}
+    ${g && g.status === 'final' ? '<div class="note">本場已標記「已結束」，管理員仍可匯入更正。</div>' : ''}
+    <div class="inn-row" style="gap:8px;flex-wrap:wrap">
+      <button class="primary" type="button" id="shi-go" ${!g || missBat.length ? 'disabled' : ''}>${u.status === 'imported' ? '重新匯入' : '匯入'}</button>
+      ${missBat.length ? `<span class="note" style="color:var(--r1)">還有 ${missBat.length} 位打者未對應：${missBat.map(n => '#' + esc(n)).join('、')}</span>` : ''}
+      <span class="spacer" style="flex:1"></span>
+      <input id="shi-note" placeholder="退回原因（選填）" style="min-width:180px">
+      <button class="ghost" type="button" id="shi-rej">退回</button>
+      <button class="ghost" type="button" id="shi-del" style="color:var(--r1)">刪除這份上傳</button>
+    </div>
+  </div>`;
+  box.querySelectorAll('select[data-no]').forEach(sel => sel.onchange = () => { IM.map[sel.dataset.no] = sel.value; renderImportDetail(); });
+  $('shi-go').onclick = () => {
+    const go = () => doImport(u, P);
+    exist.length ? ask(`匯入會取代第 ${g.gameNo} 場 ${teamName(u.teamId)} 已有的 ${exist.length} 筆打席紀錄，確定？`, '確認匯入', go) : go();
+  };
+  $('shi-rej').onclick = async () => { try { await col(U.tid, 'uploads').doc(u.id).update({ status: 'rejected', note: $('shi-note').value.trim() || '請確認後重新上傳', reviewedAt: FB.TS() }); toast('已退回'); } catch (e) { toast(friendlyError(e)); } };
+  $('shi-del').onclick = () => ask('刪除這份上傳的紀錄表？（已匯入的打席不受影響）', '確認刪除', async () => { await col(U.tid, 'uploads').doc(u.id).delete(); IM.sel = ''; toast('已刪除'); });
+}
+async function doImport(u, P) {
+  const g = D.games.find(x => x.id === u.gameId); if (!g) return;
+  const { idOf } = impCtx(u), uid = FB.auth.currentUser.uid;
+  const balls = sheetToBalls(P, { gameId: u.gameId, teamId: u.teamId, side: u.side, idOf, player: id => D.players.find(p => p.id === id), uid, uploadId: u.id });
+  const old = D.balls.filter(b => b.gameId === u.gameId && b.teamId === u.teamId);
+  try {
+    $('shi-go').disabled = true; toast('匯入中…');
+    for (let i = 0; i < old.length; i += 400) { const b = FB.db.batch(); old.slice(i, i + 400).forEach(x => b.delete(col(U.tid, 'balls').doc(x.id))); await b.commit(); }
+    for (let i = 0; i < balls.length; i += 400) { const b = FB.db.batch(); balls.slice(i, i + 400).forEach(x => b.set(col(U.tid, 'balls').doc(), Object.assign({ createdAt: FB.TS() }, x))); await b.commit(); }
+    const innings = Object.assign({ away: [], home: [] }, g.innings || {}); innings[u.side] = (P.innings || []).slice();
+    const tot = innings[u.side].reduce((a, b) => a + (+b || 0), 0), lu = Object.assign({}, g.lineups || {}, { [u.side]: sheetLineup(P, idOf) });
+    await col(U.tid, 'games').doc(g.id).update({ innings, [u.side + 'Score']: tot, lineups: lu, updatedAt: FB.TS() });
+    await col(U.tid, 'uploads').doc(u.id).update({ status: 'imported', importedAt: FB.TS(), importedBy: uid, ballCount: balls.length, note: '' });
+    toast(`已匯入 ${balls.length} 個打席，第 ${g.gameNo} 場 ${teamName(u.teamId)} 逐局得分與打序已更新`);
+  } catch (e) { toast(friendlyError(e)); $('shi-go').disabled = false; }
+}
+
+/* ---------- 紀錄員 ---------- */
+function renderUsers() {
+  const me = FB.auth.currentUser?.uid;
+  const order = { pending: 0, scorer: 1, admin: 2 };
+  $('user-rows').innerHTML = [...D.users].sort((a, b) => (order[a.role] ?? 0) - (order[b.role] ?? 0)).map(u => `<tr data-id="${u.id}">
+    <td><input data-k="name" value="${esc(u.name || '')}" placeholder="填寫姓名" aria-label="姓名" style="width:100%;min-width:100px"></td><td>${esc(u.email || u.id)}${u.id === me ? ' <span class="badge">你</span>' : ''}</td><td>${fmtDT(u.createdAt)}</td>
+    <td><select data-k="role" aria-label="權限" ${u.id === me ? 'disabled' : ''}>${[['pending', '待開通'], ['scorer', '紀錄員'], ['admin', '管理員']].map(([k, l]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    ${u.role === 'pending' ? '<span class="badge pending">待開通</span>' : ''}</td></tr>`).join('');
+}
+$('user-rows').addEventListener('change', e => {
+  const id = e.target.closest('tr')?.dataset.id; if (!id) return;
+  if (e.target.dataset.k === 'name') { FB.db.collection('users').doc(id).update({ name: e.target.value.trim() }).then(() => toast('已更新姓名'), err => toast(friendlyError(err))); return; }
+  FB.db.collection('users').doc(id).update({ role: e.target.value }).then(() => toast('已更新權限'), err => toast(friendlyError(err)));
+});
+
+/* ================= 歷史資料：歷史落點 CSV 匯入・球員跨屆對照・封存與備份 ================= */
+const HCOLS = ['日期', '場次', '隊伍', '對手', '先後攻', '局', '棒次', '背號', '姓名', '結果', '落點', '打點'];
+const HIS = { rows: [], file: '', xteam: '', ext: null, extKey: '' };
+function parseCSVText(txt) {   // 支援引號、逗號與換行
+  const out = []; let row = [], cur = '', q = false; txt = String(txt).replace(/^﻿/, '');
+  for (let i = 0; i < txt.length; i++) {
+    const c = txt[i];
+    if (q) { if (c === '"') { if (txt[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ',' || c === '\t') { row.push(cur.trim()); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && txt[i + 1] === '\n') i++; row.push(cur.trim()); cur = ''; if (row.some(x => x)) out.push(row); row = []; }
+    else cur += c;
+  }
+  row.push(cur.trim()); if (row.some(x => x)) out.push(row);
+  return out;
+}
+function saveFile(name, text, type) {   // 下載檔案（Excel 開 CSV 需要 BOM 才不會亂碼）
+  const blob = new Blob(['﻿' + text], { type: type || 'text/csv;charset=utf-8' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+const normDate = s => { const m = String(s || '').match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/); return m ? `${m[1]}/${String(+m[2]).padStart(2, '0')}/${String(+m[3]).padStart(2, '0')}` : ''; };
+const resCode = s => { const v = String(s || '').trim().toUpperCase().replace('１', '1').replace('２', '2').replace('３', '3'); return { '一安': '1B', '二安': '2B', '三安': '3B', '全壘打': 'HR', '保送': 'BB', '四壞': 'BB', '三振': 'K' }[s] || v; };
+const hkey = r => [r.date, r.gameNo, r.team, r.opp, r.inn, r.slot, r.no, r.res, r.zone, r.seq].join('|');
+function tourLocked() { return !!(curTour() && curTour().archived); }
+
+/* ---- 解析與預覽 ---- */
+function readHistCSV(txt, fname) {
+  const rows = parseCSVText(txt), head = (rows.shift() || []).map(x => x.replace(/\s/g, ''));
+  const ix = k => head.indexOf(k), need = ['日期', '隊伍', '背號', '結果'];
+  const miss = need.filter(k => ix(k) < 0);
+  if (miss.length) { toast(`CSV 缺少欄位：${miss.join('、')}（請用「下載範本」的格式）`); return; }
+  const seq = {};
+  HIS.rows = rows.map((c, i) => {
+    const g = k => ix(k) >= 0 ? (c[ix(k)] || '').trim() : '';
+    const r = { line: i + 2, date: normDate(g('日期')), gameNo: g('場次'), team: g('隊伍'), opp: g('對手'), side: /後/.test(g('先後攻')) ? 'home' : 'away',
+      inn: parseInt(g('局'), 10) || 1, slot: parseInt(g('棒次'), 10) || null, no: normNo(g('背號').replace('#', '')), name: g('姓名'), res: resCode(g('結果')), zone: g('落點').toUpperCase().replace(/\s/g, ''), rbi: parseInt(g('打點'), 10) || 0, err: [] };
+    if (!r.date) r.err.push('日期格式不對'); if (!r.team) r.err.push('沒有隊伍'); if (!r.no && !r.name) r.err.push('沒有背號與姓名');
+    if (!SHEET_RES[r.res]) r.err.push(`結果「${g('結果')}」無法辨識`);
+    if (r.zone && !sheetZoneXY(r.zone)) r.err.push(`落點「${r.zone}」不是紀錄表格位`);
+    const sk = [r.date, r.gameNo, r.team, r.opp, r.inn, r.slot, r.no, r.res, r.zone].join('|'); r.seq = seq[sk] = (seq[sk] || 0) + 1;   // 同一局同一人同結果出現兩次也分得開
+    r.key = hkey(r); return r;
+  });
+  HIS.file = fname || ''; renderHist();
+}
+function histPlan() {
+  const ok = HIS.rows.filter(r => !r.err.length), have = new Set(D.balls.map(b => b.histKey).filter(Boolean));
+  const dup = ok.filter(r => have.has(r.key)), go = ok.filter(r => !have.has(r.key));
+  const tByName = n => D.teams.find(t => t.name === n || (t.aliases || []).includes(n));
+  const newTeams = [...new Set(go.flatMap(r => [r.team, r.opp]).filter(n => n && !tByName(n)))];
+  const gk = r => r.date + '|' + (r.gameNo || '') + '|' + [r.team, r.opp].sort().join('/');
+  const findGame = r => { const a = tByName(r.team), b = tByName(r.opp); if (!a) return null;
+    return D.games.find(g => (r.gameNo && String(g.gameNo) === r.gameNo) || ((g.awayId === a.id || g.homeId === a.id) && (!b || g.awayId === b.id || g.homeId === b.id) && (() => { const t = tpe(g.scheduledAt); return t && `${t.y}/${String(t.m).padStart(2, '0')}/${String(t.d).padStart(2, '0')}` === r.date; })())); };
+  const newGames = [...new Map(go.filter(r => !findGame(r)).map(r => [gk(r), r])).values()];
+  const pk = r => r.team + '|' + r.no + '|' + r.name;
+  const findP = r => { const t = tByName(r.team); if (!t) return null; const R = D.players.filter(p => p.teamId === t.id);
+    return (r.name && R.find(p => p.name === r.name)) || (r.no && R.filter(p => normNo(p.no) === r.no).length === 1 && !r.name ? R.find(p => normNo(p.no) === r.no) : null) || null; };
+  const newPlayers = [...new Map(go.filter(r => !findP(r)).map(r => [pk(r), r])).values()];
+  return { ok, dup, go, newTeams, newGames, newPlayers, tByName, gk, findGame, pk, findP };
+}
+function renderHist() {
+  const t = curTour(); if (!$('hx-target')) return;
+  $('hx-target').innerHTML = t ? `匯入到目前選擇的賽事：<b>${esc(t.name)}</b>${t.archived ? ' <span class="badge pending">已封存</span>' : ''}。過去的屆別請先到「賽事」分頁新增那一屆，再切換過來匯入。` : '請先到「賽事」分頁建立賽事。';
+  const box = $('hx-preview');
+  if (!HIS.rows.length) box.innerHTML = '';
+  else {
+    const P = histPlan(), bad = HIS.rows.filter(r => r.err.length);
+    box.innerHTML = `<div class="hx-sum"><span>檔案 <b>${esc(HIS.file)}</b></span><span>共 <b>${HIS.rows.length}</b> 列</span><span>可匯入 <b>${P.go.length}</b> 個打席</span>${P.dup.length ? `<span>已匯入過 <b>${P.dup.length}</b> 列（略過）</span>` : ''}${bad.length ? `<span style="color:var(--r1)">有問題 <b>${bad.length}</b> 列（不匯入）</span>` : ''}</div>
+      ${P.newTeams.length || P.newGames.length || P.newPlayers.length ? `<div class="note">匯入時會自動新增：${P.newTeams.length ? `球隊 ${P.newTeams.length} 隊（${P.newTeams.map(esc).join('、')}）` : ''}${P.newGames.length ? `${P.newTeams.length ? '；' : ''}場次 ${P.newGames.length} 場` : ''}${P.newPlayers.length ? `；球員 ${P.newPlayers.length} 位` : ''}。</div>` : ''}
+      ${bad.length ? `<div class="tbl-wrap" style="max-height:220px"><table><thead><tr><th>列</th><th>隊伍</th><th>背號</th><th>姓名</th><th>結果</th><th>落點</th><th>問題</th></tr></thead><tbody>${bad.map(r => `<tr><td>${r.line}</td><td>${esc(r.team)}</td><td>${esc(r.no)}</td><td>${esc(r.name)}</td><td>${esc(r.res)}</td><td>${esc(r.zone)}</td><td style="color:var(--r1)">${r.err.join('；')}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      <div class="inn-row"><button class="primary" type="button" id="hx-go" ${!P.go.length || tourLocked() ? 'disabled' : ''}>匯入 ${P.go.length} 個打席</button><button class="ghost" type="button" id="hx-clear">取消</button>${tourLocked() ? '<span class="note">本屆已封存，請先解除封存</span>' : ''}</div>`;
+  }
+  /* 已匯入的批次 */
+  const bs = {}; D.balls.filter(b => b.histBatch).forEach(b => { const x = bs[b.histBatch] = bs[b.histBatch] || { id: b.histBatch, n: 0, file: b.histFile || '', at: b.at || 0 }; x.n++; });
+  const L = Object.values(bs).sort((a, b) => b.at - a.at);
+  $('hx-batches').innerHTML = L.length ? `<table><thead><tr><th>匯入時間</th><th>檔案</th><th class="num">打席</th><th></th></tr></thead><tbody>${L.map(x => `<tr><td>${x.at ? fmtDT(new Date(x.at)) : ''}</td><td>${esc(x.file)}</td><td class="num">${x.n}</td><td><button class="ghost sm danger" type="button" data-hb="${x.id}" ${tourLocked() ? 'disabled' : ''}>刪除這批</button></td></tr>`).join('')}</tbody></table>` : '<p class="note" style="margin:0">本屆還沒有用 CSV 匯入的歷史資料。</p>';
+  renderArchive();
+}
+async function doHistImport() {
+  const P = histPlan(); if (!P.go.length) return;
+  const batch = 'h' + Date.now().toString(36), uid = FB.auth.currentUser.uid, at = Date.now();
+  $('hx-go').disabled = true; toast('匯入中…');
+  try {
+    const teamId = {};
+    for (const n of P.newTeams) { const ref = await col(U.tid, 'teams').add({ name: n, group: '', histBatch: batch }); teamId[n] = ref.id; }
+    const tid = n => (P.tByName(n) || {}).id || teamId[n];
+    const pid = {}, pmeta = {};
+    for (const r of P.newPlayers) { const d = { teamId: tid(r.team), no: r.no || '', name: r.name || ('#' + r.no), sex: '', bats: 'R', histBatch: batch }; const ref = await col(U.tid, 'players').add(d); pid[P.pk(r)] = ref.id; pmeta[ref.id] = d; }
+    const gid = {};
+    for (const r of P.newGames) {
+      const a = tid(r.team), o = r.opp ? tid(r.opp) : '';
+      const d = { gameNo: r.gameNo || '', scheduledAt: firebase.firestore.Timestamp.fromDate(parseTPE(r.date + ' 12:00')), field: '', round: '歷史匯入', awayId: r.side === 'home' ? o : a, homeId: r.side === 'home' ? a : o, status: 'final', histBatch: batch };
+      const ref = await col(U.tid, 'games').add(d); gid[P.gk(r)] = ref.id;
+    }
+    const gameOf = r => (P.findGame(r) || {}).id || gid[P.gk(r)];
+    const playerOf = r => { const p = P.findP(r); return p ? p.id : pid[P.pk(r)]; };
+    const balls = P.go.map((r, i) => {
+      const id = playerOf(r), p = D.players.find(x => x.id === id) || pmeta[id] || {}, g = gameOf(r), gm = D.games.find(x => x.id === g);
+      const side = gm ? (gm.homeId === tid(r.team) ? 'home' : 'away') : r.side;
+      const b = sheetToBalls({ pas: [{ inn: r.inn, round: 0, slot: r.slot, sub: false, no: r.no, zone: r.zone, res: r.res, rbi: r.rbi, scorers: [] }] },
+        { gameId: g, teamId: tid(r.team), side, idOf: () => id, player: () => p, uid })[0];
+      return Object.assign(b, { batterName: p.name || r.name, source: 'csv', histBatch: batch, histFile: HIS.file, histKey: r.key, at: at + i });
+    });
+    for (let i = 0; i < balls.length; i += 400) { const wb = FB.db.batch(); balls.slice(i, i + 400).forEach(x => wb.set(col(U.tid, 'balls').doc(), Object.assign({ createdAt: FB.TS() }, x))); await wb.commit(); }
+    toast(`已匯入 ${balls.length} 個打席${P.newGames.length ? `、新增 ${P.newGames.length} 場` : ''}${P.newPlayers.length ? `、${P.newPlayers.length} 位球員` : ''}`);
+    HIS.rows = []; renderHist();
+  } catch (e) { toast(friendlyError(e)); renderHist(); }
+}
+async function delHistBatch(id) {
+  const n = D.balls.filter(b => b.histBatch === id).length;
+  ask(`刪除這批匯入的 ${n} 個打席？同一批自動新增、且沒有其他資料的場次、球員與球隊也會一起刪除。`, '確認刪除', async () => {
+    const bs = D.balls.filter(b => b.histBatch === id);
+    for (let i = 0; i < bs.length; i += 400) { const wb = FB.db.batch(); bs.slice(i, i + 400).forEach(x => wb.delete(col(U.tid, 'balls').doc(x.id))); await wb.commit(); }
+    const left = D.balls.filter(b => b.histBatch !== id);
+    const gs = D.games.filter(g => g.histBatch === id && !left.some(b => b.gameId === g.id));
+    for (const g of gs) await col(U.tid, 'games').doc(g.id).delete();
+    const gl = D.games.filter(g => !gs.includes(g));
+    for (const p of D.players.filter(p => p.histBatch === id && !left.some(b => b.batterId === p.id))) await col(U.tid, 'players').doc(p.id).delete();
+    for (const t of D.teams.filter(t => t.histBatch === id && !gl.some(g => g.awayId === t.id || g.homeId === t.id) && !left.some(b => b.teamId === t.id))) await col(U.tid, 'teams').doc(t.id).delete();
+    toast(`已刪除 ${bs.length} 個打席`);
+  });
+}
+function histTemplate() {
+  saveFile('歷史落點匯入範本.csv', toCSV([HCOLS,
+    ['2024/10/19', '12', '國立臺北科技大學（北科狼）', '淡江大學', '先攻', '1', '1', '7', '呂朝福', '1B', '78', '0'],
+    ['2024/10/19', '12', '國立臺北科技大學（北科狼）', '淡江大學', '先攻', '1', '2', '55', '卓建男', 'F', '8D', '0'],
+    ['2024/10/19', '12', '國立臺北科技大學（北科狼）', '淡江大學', '先攻', '1', '3', '51', '李明儒', 'K', '', '0'],
+    ['2024/10/19', '12', '國立臺北科技大學（北科狼）', '淡江大學', '先攻', '2', '4', '1', '黃復隆', 'HR', '108XD', '2']]));
+}
+
+/* ---- 匯出：本屆打席 CSV（與匯入範本同格式，可再匯入）＋完整備份 JSON ---- */
+const toSheetRes = b => (b.paper && b.paper.res) || { OUT: b.type === 'G' ? 'G' : 'F', SF: 'FS', GS: 'GS', K: 'K', BB: 'BB', DP: 'DP', FC: 'FC', E: 'E', '1B': '1B', '2B': '2B', '3B': '3B', HR: 'HR' }[b.result] || b.result;
+function exportBallsCSV() {
+  const t = curTour(); if (!t) return;
+  const rows = [HCOLS].concat([...D.balls].sort((a, b) => (a.at || 0) - (b.at || 0)).map(b => {
+    const g = D.games.find(x => x.id === b.gameId) || {}, d = tpe(g.scheduledAt), home = g.homeId === b.teamId, opp = home ? g.awayId : g.homeId;
+    const p = D.players.find(x => x.id === b.batterId);
+    return [d ? `${d.y}/${String(d.m).padStart(2, '0')}/${String(d.d).padStart(2, '0')}` : '', g.gameNo || '', teamName(b.teamId), opp ? teamName(opp) : '', home ? '後攻' : '先攻', b.inning || '', b.slot || '', p ? p.no : (b.batterNo || ''), p ? p.name : (b.batterName || ''), toSheetRes(b), b.zone || '', (b.run && b.run.rbi) || 0];
+  }));
+  saveFile(`${t.name}_打席紀錄.csv`, toCSV(rows)); toast(`已匯出 ${rows.length - 1} 個打席`);
+}
+async function exportBackup() {
+  const t = curTour(); if (!t) return;
+  const out = { tournament: { id: t.id, ...t }, exportedAt: new Date().toISOString() };
+  for (const c of ['teams', 'players', 'games', 'balls', 'uploads']) out[c] = (await col(U.tid, c).get()).docs.map(d => ({ id: d.id, ...d.data() }));
+  saveFile(`${t.name}_完整備份.json`, JSON.stringify(out, (k, v) => v && typeof v === 'object' && 'seconds' in v && typeof v.toDate === 'function' ? v.toDate().toISOString() : v, 1), 'application/json');
+  toast('已下載完整備份');
+}
+function renderArchive() {
+  const t = curTour(); if (!$('ar-state')) return;
+  $('ar-state').innerHTML = !t ? '' : t.archived
+    ? `<span class="badge pending">已封存</span> ${t.archivedAt ? fmtDT(t.archivedAt) + ' 封存' : ''}。本屆的名單、賽程、比分與打席都只能查看；紀錄員也不能再上傳到這一屆。`
+    : `<span class="badge ok">開放中</span> 賽事結束、所有紀錄表都匯入後，按「封存本屆」鎖住資料，並把備份檔存到社團雲端。`;
+  $('ar-toggle').textContent = t && t.archived ? '解除封存' : '封存本屆';
+  $('ar-toggle').disabled = !t;
+  document.body.classList.toggle('t-archived', !!(t && t.archived));
+  $('ar-banner').hidden = !(t && t.archived);
+}
+$('ar-toggle').onclick = () => {
+  const t = curTour(); if (!t) return;
+  if (t.archived) ask(`解除「${t.name}」的封存？解除後可以再修改資料。`, '確認解除', async () => { await T(t.id).update({ archived: false }); toast('已解除封存'); });
+  else {
+    const pend = (D.uploads || []).filter(u => u.status === 'pending').length;
+    ask(`封存「${t.name}」？${pend ? `還有 ${pend} 份紀錄表待匯入。` : ''}封存後名單、賽程、比分與打席都不能修改，建議先下載備份。`, '確認封存', async () => { await T(t.id).update({ archived: true, archivedAt: FB.TS() }); toast('已封存本屆'); });
+  }
+};
+$('ar-csv').onclick = exportBallsCSV;
+$('ar-json').onclick = () => exportBackup().catch(e => toast(friendlyError(e)));
+$('hx-tpl').onclick = histTemplate;
+$('hx-file').onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = ''; const rd = new FileReader(); rd.onload = () => readHistCSV(rd.result, f.name); rd.readAsText(f, 'utf-8'); };
+$('hx-preview').addEventListener('click', e => { if (e.target.id === 'hx-go') doHistImport(); if (e.target.id === 'hx-clear') { HIS.rows = []; renderHist(); } });
+$('hx-batches').addEventListener('click', e => { const id = e.target.dataset.hb; if (id) delHistBatch(id); });
+
+/* ---- 球員跨屆對照 ---- */
+async function loadExt() {   // 其他屆的球隊、名單與打席數（只讀一次，切換賽事後重抓）
+  const key = U.tid + '|' + D.tournaments.map(t => t.id).join(',');
+  if (HIS.extKey === key && HIS.ext) return HIS.ext;
+  HIS.extKey = key; HIS.ext = null; $('xp-list').innerHTML = '<p class="note">讀取其他屆資料中…</p>';
+  const ext = [];
+  for (const t of D.tournaments.filter(x => x.id !== U.tid)) {
+    try {
+      const [ts, ps, bs] = await Promise.all(['teams', 'players', 'balls'].map(c => col(t.id, c).get()));
+      const cnt = {}; bs.docs.forEach(d => { const b = d.data(); cnt[b.batterId] = (cnt[b.batterId] || 0) + 1; });
+      ext.push({ t, teams: ts.docs.map(d => ({ id: d.id, ...d.data() })), players: ps.docs.map(d => ({ id: d.id, ...d.data(), n: cnt[d.id] || 0 })) });
+    } catch (e) { /* 無權限略過 */ }
+  }
+  if (HIS.extKey === key) HIS.ext = ext;
+  return ext;
+}
+const aliasOf = t => new Set([t && t.name, ...((t && t.aliases) || [])].filter(Boolean));
+async function renderXP() {
+  if (!$('xp-team')) return;
+  const cur = $('xp-team').value;
+  $('xp-team').innerHTML = D.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  $('xp-team').value = D.teams.some(t => t.id === cur) ? cur : (D.teams.find(t => t.id === U.team) || D.teams[0] || {}).id || '';
+  const tm = D.teams.find(t => t.id === $('xp-team').value); if (!tm) { $('xp-list').innerHTML = ''; return; }
+  const ext = await loadExt(), names = aliasOf(tm);
+  const pool = ext.flatMap(e => e.teams.filter(t => [...aliasOf(t)].some(n => names.has(n))).flatMap(t => e.players.filter(p => p.teamId === t.id).map(p => ({ ...p, tid: e.t.id, tname: e.t.name, team: t.name }))));
+  const R = D.players.filter(p => p.teamId === tm.id).sort((a, b) => (+a.no || 999) - (+b.no || 999));
+  const showAll = $('xp-all').checked;
+  $('xp-note').textContent = ext.length ? `比對 ${ext.length} 個其他屆別中，隊名或別名相同的球隊（${[...names].join('、')}）。` : '系統裡還沒有其他屆別的資料。';
+  const rows = R.map(p => {
+    const cands = pool.filter(c => c.name === p.name || (c.no && normNo(c.no) === normNo(p.no)) || (p.hist || []).includes(c.tid + '/' + c.id) || (p.histNo || []).includes(c.tid + '/' + c.id));
+    const st = c => { const k = c.tid + '/' + c.id; return (p.histNo || []).includes(k) ? 'no' : (p.hist || []).includes(k) ? 'yes' : c.name === p.name ? 'auto' : 'ask'; };
+    const todo = cands.filter(c => st(c) === 'ask' || (st(c) === 'auto' && cands.filter(x => x.tid === c.tid && x.name === p.name).length > 1));
+    return { p, cands, st, todo };
+  }).filter(x => x.cands.length && (showAll || x.todo.length));
+  const lbl = { yes: ['已確認', 'ok'], no: ['不是同一人', ''], auto: ['同名自動', ''], ask: ['待確認', 'pending'] };
+  $('xp-list').innerHTML = rows.length ? `<table class="xp"><thead><tr><th>本屆球員</th><th>其他屆的可能人選</th></tr></thead><tbody>${rows.map(({ p, cands, st }) => `<tr><td><b>#${esc(p.no)} ${esc(p.name)}</b></td><td>${cands.map(c => { const s = st(c); return `<div class="xp-c"><span>${esc(c.tname)}・${esc(c.team)}・#${esc(c.no)} <b>${esc(c.name)}</b>・${c.n} 打席</span><span class="badge ${lbl[s][1]}">${lbl[s][0]}</span><span class="xp-b"><button class="ghost sm" type="button" data-p="${p.id}" data-k="${c.tid}/${c.id}" data-v="yes" ${s === 'yes' ? 'disabled' : ''}>是同一人</button><button class="ghost sm" type="button" data-p="${p.id}" data-k="${c.tid}/${c.id}" data-v="no" ${s === 'no' ? 'disabled' : ''}>不是</button></span></div>`; }).join('')}</td></tr>`).join('')}</tbody></table>`
+    : `<p class="note" style="margin:0">${showAll ? '這一隊在其他屆別找不到同名或同背號的球員。' : '沒有需要確認的球員（同名且只有一位的會自動對上）。勾選「顯示全部」可查看所有對照。'}</p>`;
+}
+$('xp-team').onchange = renderXP; $('xp-all').onchange = renderXP;
+$('xp-list').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-k]'); if (!b) return;
+  if (tourLocked()) { toast('本屆已封存，請先解除封存'); return; }
+  const p = D.players.find(x => x.id === b.dataset.p); if (!p) return;
+  const k = b.dataset.k, hist = (p.hist || []).filter(x => x !== k), histNo = (p.histNo || []).filter(x => x !== k);
+  (b.dataset.v === 'yes' ? hist : histNo).push(k);
+  try { await col(U.tid, 'players').doc(p.id).update({ hist, histNo }); p.hist = hist; p.histNo = histNo; toast(b.dataset.v === 'yes' ? `已確認：${p.name} 是同一人` : `已排除：不是 ${p.name}`); renderXP(); } catch (err) { toast(friendlyError(err)); }
+});
+
+/* ---------- 分頁 ---------- */
+function renderAll() { renderRoster(); renderGames(); renderStats(); renderImports(); renderHist(); if (U.tab === 'hist') renderXP(); }
+(function tabs() {
+  const ts = [...document.querySelectorAll('.tab')], ps = [...document.querySelectorAll('.tabpane')];
+  const set = t => { if (t === 'hist' && U.tab !== 'hist') setTimeout(renderXP, 0); U.tab = t; ts.forEach(b => b.setAttribute('aria-selected', b.dataset.t === t)); ps.forEach(p => p.hidden = p.dataset.t !== t); saveU(); };
+  ts.forEach(b => b.onclick = () => set(b.dataset.t)); set(ts.some(b => b.dataset.t === U.tab) ? U.tab : 'tour');
+})();
+$('gf-dt').value = nowTPEInput();
+</script>
+</body>
+</html>
