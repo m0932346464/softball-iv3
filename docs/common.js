@@ -21,6 +21,14 @@ const FB = (() => {
   return { ready: true, app, db, auth, TS };
 })();
 
+/* 只給紀錄員看的連結（data-scorer）：沒登入或不是紀錄員／管理員就隱藏，例如公開頁面上的「打擊落點紀錄」 */
+function gateScorerLinks() {
+  const els = () => document.querySelectorAll('[data-scorer]'), set = on => els().forEach(e => e.hidden = !on);
+  set(false); if (!FB.ready) return;
+  FB.auth.onAuthStateChanged(async u => { if (!u) { set(false); return; }
+    try { const d = await FB.db.collection('users').doc(u.uid).get(); set(d.exists && ['admin', 'scorer'].includes(d.data().role)); } catch (_) { set(false); } });
+}
+if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', gateScorerLinks);
 /* 打席先後：伺服器時間（含奈秒）→ 同一秒內再用裝置時間排序 */
 const tsv = b => b.createdAt ? b.createdAt.seconds * 1e9 + (b.createdAt.nanoseconds || 0) : 9e18;
 const byTime = (a, b) => (tsv(a) - tsv(b)) || ((a.at || 0) - (b.at || 0));
